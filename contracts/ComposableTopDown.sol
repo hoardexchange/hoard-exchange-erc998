@@ -536,6 +536,11 @@ contract ComposableTopDown is
             !childTokens[_tokenId][_childContract].contains(_childTokenId),
             "Cannot receive child token because it has already been received."
         );
+        uint256 childTokensLength =
+            childTokens[_tokenId][_childContract].length();
+        if (childTokensLength == 0) {
+            childContracts[_tokenId].add(_childContract);
+        }
         childTokens[_tokenId][_childContract].add(_childTokenId);
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
