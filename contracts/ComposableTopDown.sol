@@ -3,6 +3,7 @@ pragma solidity ^0.7.0;
 import "@openzeppelin/contracts/introspection/ERC165.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 
 import "./interfaces/IERC20AndERC223.sol";
 import "./interfaces/IERC998ERC20TopDown.sol";
@@ -281,22 +282,18 @@ contract ComposableTopDown is
         }
     }
 
+    using EnumerableSet for EnumerableSet.UintSet;
+    using EnumerableSet for EnumerableSet.AddressSet;
     ////////////////////////////////////////////////////////
     // ERC998ERC721 and ERC998ERC721Enumerable implementation
     ////////////////////////////////////////////////////////
 
     // tokenId => child contract
-    mapping(uint256 => address[]) private childContracts;
-
-    // tokenId => (child address => contract index+1)
-    mapping(uint256 => mapping(address => uint256)) private childContractIndex;
+    mapping(uint256 => EnumerableSet.AddressSet) private childContracts;
 
     // tokenId => (child address => array of child tokens)
-    mapping(uint256 => mapping(address => uint256[])) private childTokens;
-
-    // tokenId => (child address => (child token => child index+1)
-    mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
-        private childTokenIndex;
+    mapping(uint256 => mapping(address => EnumerableSet.UintSet))
+        private childTokens;
 
     // child address => childId => tokenId
     mapping(address => mapping(uint256 => uint256)) internal childTokenOwner;
@@ -306,39 +303,15 @@ contract ComposableTopDown is
         address _childContract,
         uint256 _childTokenId
     ) private {
-        uint256 tokenIndex =
-            childTokenIndex[_tokenId][_childContract][_childTokenId];
-        require(tokenIndex != 0, "Child token not owned by token.");
-
         // remove child token
         uint256 lastTokenIndex =
-            childTokens[_tokenId][_childContract].length - 1;
-        uint256 lastToken =
-            childTokens[_tokenId][_childContract][lastTokenIndex];
-        if (_childTokenId == lastToken) {
-            childTokens[_tokenId][_childContract][tokenIndex - 1] = lastToken;
-            childTokenIndex[_tokenId][_childContract][lastToken] = tokenIndex;
-        }
-        // childTokens[_tokenId][_childContract].length--;
-        // added:
-        childTokens[_tokenId][_childContract].pop();
-        delete childTokenIndex[_tokenId][_childContract][_childTokenId];
+            childTokens[_tokenId][_childContract].length() - 1;
+        childTokens[_tokenId][_childContract].remove(_childTokenId);
         delete childTokenOwner[_childContract][_childTokenId];
 
         // remove contract
         if (lastTokenIndex == 0) {
-            uint256 lastContractIndex = childContracts[_tokenId].length - 1;
-            address lastContract = childContracts[_tokenId][lastContractIndex];
-            if (_childContract != lastContract) {
-                uint256 contractIndex =
-                    childContractIndex[_tokenId][_childContract];
-                childContracts[_tokenId][contractIndex] = lastContract;
-                childContractIndex[_tokenId][lastContract] = contractIndex;
-            }
-            // childContracts[_tokenId].length--;
-            // added:
-            childContracts[_tokenId].pop();
-            delete childContractIndex[_tokenId][_childContract];
+            childContracts[_tokenId].remove(_childContract);
         }
     }
 
@@ -351,7 +324,7 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId)
         );
         require(tokenId == _fromTokenId);
         require(_to != address(0));
@@ -381,7 +354,7 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId)
         );
         require(tokenId == _fromTokenId);
         require(_to != address(0));
@@ -411,7 +384,7 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId)
         );
         require(tokenId == _fromTokenId);
         require(_to != address(0));
@@ -451,7 +424,7 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId)
         );
         require(tokenId == _fromTokenId);
         require(_toContract != address(0));
@@ -560,22 +533,10 @@ contract ComposableTopDown is
             "_tokenId does not exist."
         );
         require(
-            childTokenIndex[_tokenId][_childContract][_childTokenId] == 0,
+            !childTokens[_tokenId][_childContract].contains(_childTokenId),
             "Cannot receive child token because it has already been received."
         );
-        uint256 childTokensLength =
-            childTokens[_tokenId][_childContract].length;
-        if (childTokensLength == 0) {
-            childContractIndex[_tokenId][_childContract] = childContracts[
-                _tokenId
-            ]
-                .length;
-            childContracts[_tokenId].push(_childContract);
-        }
-        childTokens[_tokenId][_childContract].push(_childTokenId);
-        childTokenIndex[_tokenId][_childContract][_childTokenId] =
-            childTokensLength +
-            1;
+        childTokens[_tokenId][_childContract].add(_childTokenId);
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
     }
@@ -588,8 +549,9 @@ contract ComposableTopDown is
         parentTokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             parentTokenId > 0 ||
-                childTokenIndex[parentTokenId][_childContract][_childTokenId] >
-                0
+                childTokens[parentTokenId][_childContract].contains(
+                    _childTokenId
+                )
         );
         return (tokenIdToTokenOwner[parentTokenId], parentTokenId);
     }
@@ -603,8 +565,9 @@ contract ComposableTopDown is
         parentTokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             parentTokenId > 0 ||
-                childTokenIndex[parentTokenId][_childContract][_childTokenId] >
-                0
+                childTokens[parentTokenId][_childContract].contains(
+                    _childTokenId
+                )
         );
         return (
             (ERC998_MAGIC_VALUE << 224) |
@@ -619,7 +582,7 @@ contract ComposableTopDown is
         returns (bool)
     {
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
-        return childTokenIndex[tokenId][_childContract][_childTokenId] != 0;
+        return childTokens[tokenId][_childContract].contains(_childTokenId);
     }
 
     function totalChildContracts(uint256 _tokenId)
@@ -628,7 +591,7 @@ contract ComposableTopDown is
         override
         returns (uint256)
     {
-        return childContracts[_tokenId].length;
+        return childContracts[_tokenId].length();
     }
 
     function childContractByIndex(uint256 _tokenId, uint256 _index)
@@ -637,11 +600,7 @@ contract ComposableTopDown is
         override
         returns (address childContract)
     {
-        require(
-            _index < childContracts[_tokenId].length,
-            "Contract address does not exist for this token and index."
-        );
-        return childContracts[_tokenId][_index];
+        return childContracts[_tokenId].at(_index);
     }
 
     function totalChildTokens(uint256 _tokenId, address _childContract)
@@ -650,7 +609,7 @@ contract ComposableTopDown is
         override
         returns (uint256)
     {
-        return childTokens[_tokenId][_childContract].length;
+        return childTokens[_tokenId][_childContract].length();
     }
 
     function childTokenByIndex(
@@ -658,22 +617,17 @@ contract ComposableTopDown is
         address _childContract,
         uint256 _index
     ) external view override returns (uint256 childTokenId) {
-        require(
-            _index < childTokens[_tokenId][_childContract].length,
-            "Token does not own a child token at contract address and index."
-        );
-        return childTokens[_tokenId][_childContract][_index];
+        return childTokens[_tokenId][_childContract].at(_index);
     }
 
     ////////////////////////////////////////////////////////
     // ERC998ERC223 and ERC998ERC223Enumerable implementation
     ////////////////////////////////////////////////////////
 
-    // tokenId => token contract
-    mapping(uint256 => address[]) erc20Contracts;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
-    // tokenId => (token contract => token contract index)
-    mapping(uint256 => mapping(address => uint256)) erc20ContractIndex;
+    // tokenId => token contract
+    mapping(uint256 => EnumerableSet.AddressSet) erc20Contracts;
 
     // tokenId => (token contract => balance)
     mapping(uint256 => mapping(address => uint256)) erc20Balances;
@@ -703,18 +657,7 @@ contract ComposableTopDown is
         uint256 newERC20Balance = erc20Balance - _value;
         erc20Balances[_tokenId][_erc20Contract] = newERC20Balance;
         if (newERC20Balance == 0) {
-            uint256 lastContractIndex = erc20Contracts[_tokenId].length - 1;
-            address lastContract = erc20Contracts[_tokenId][lastContractIndex];
-            if (_erc20Contract != lastContract) {
-                uint256 contractIndex =
-                    erc20ContractIndex[_tokenId][_erc20Contract];
-                erc20Contracts[_tokenId][contractIndex] = lastContract;
-                erc20ContractIndex[_tokenId][lastContract] = contractIndex;
-            }
-            // erc20Contracts[_tokenId].length--;
-            // added:
-            erc20Contracts[_tokenId].pop();
-            delete erc20ContractIndex[_tokenId][_erc20Contract];
+            erc20Contracts[_tokenId].remove(_erc20Contract);
         }
     }
 
@@ -810,11 +753,7 @@ contract ComposableTopDown is
         }
         uint256 erc20Balance = erc20Balances[_tokenId][_erc20Contract];
         if (erc20Balance == 0) {
-            erc20ContractIndex[_tokenId][_erc20Contract] = erc20Contracts[
-                _tokenId
-            ]
-                .length;
-            erc20Contracts[_tokenId].push(_erc20Contract);
+            erc20Contracts[_tokenId].add(_erc20Contract);
         }
         erc20Balances[_tokenId][_erc20Contract] += _value;
         emit ReceivedERC20(_from, _tokenId, _erc20Contract, _value);
@@ -852,11 +791,7 @@ contract ComposableTopDown is
         override
         returns (address)
     {
-        require(
-            _index < erc20Contracts[_tokenId].length,
-            "Contract address does not exist for this token and index."
-        );
-        return erc20Contracts[_tokenId][_index];
+        return erc20Contracts[_tokenId].at(_index);
     }
 
     function totalERC20Contracts(uint256 _tokenId)
@@ -865,6 +800,6 @@ contract ComposableTopDown is
         override
         returns (uint256)
     {
-        return erc20Contracts[_tokenId].length;
+        return erc20Contracts[_tokenId].length();
     }
 }
