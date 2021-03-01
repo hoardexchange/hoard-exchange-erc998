@@ -108,13 +108,15 @@ contract ComposableTopDown is
         bytes memory callData =
             abi.encodeWithSelector(
                 ROOT_OWNER_OF_CHILD,
-                address(this),
+                rootOwnerAddress,
                 _childTokenId
             );
         (bool callSuccess, bytes memory data) =
             rootOwnerAddress.staticcall(callData);
         if (callSuccess) {
-            rootOwner = abi.decode(data, (bytes32));
+            assembly {
+                rootOwner := mload(add(data, 0x20))
+            }
         }
 
         if (callSuccess == true && rootOwner >> 224 == ERC998_MAGIC_VALUE) {
@@ -236,7 +238,10 @@ contract ComposableTopDown is
                 );
             (bool callSuccess, bytes memory data) = _from.staticcall(callData);
             if (callSuccess == true) {
-                bytes32 rootOwner = abi.decode(data, (bytes32));
+                bytes32 rootOwner;
+                assembly {
+                    rootOwner := mload(add(data, 0x20))
+                }
                 require(
                     rootOwner >> 224 != ERC998_MAGIC_VALUE,
                     "ComposableTopDown: _transferFrom token is child of other top down composable"
@@ -462,11 +467,6 @@ contract ComposableTopDown is
         bytes memory callData =
             abi.encodeWithSelector(APPROVE, this, _childTokenId);
         (bool callSuccess, bytes memory data) = _childContract.call(callData);
-        require(
-            callSuccess == true &&
-                (data.length == 0 || abi.decode(data, (bool))),
-            "ComposableTopDown: transferChild failed to approve"
-        );
 
         IERC721(_childContract).transferFrom(address(this), _to, _childTokenId);
         emit TransferChild(tokenId, _to, _childContract, _childTokenId);
@@ -806,7 +806,10 @@ contract ComposableTopDown is
                 callSuccess,
                 "ComposableTopDown: getERC20 allowance failed"
             );
-            uint256 remaining = abi.decode(data, (uint256));
+            uint256 remaining;
+            assembly {
+                remaining := mload(add(data, 0x20))
+            }
             require(
                 remaining >= _value,
                 "ComposableTopDown: getERC20 value greater than remaining"
