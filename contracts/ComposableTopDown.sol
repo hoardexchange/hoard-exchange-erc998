@@ -108,7 +108,7 @@ contract ComposableTopDown is
         bytes memory callData =
             abi.encodeWithSelector(
                 ROOT_OWNER_OF_CHILD,
-                rootOwnerAddress,
+                address(this),
                 _childTokenId
             );
         (bool callSuccess, bytes memory data) =
