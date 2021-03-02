@@ -3,6 +3,8 @@ pragma solidity ^0.7.0;
 import "@openzeppelin/contracts/introspection/ERC165.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 
 import "./interfaces/IERC20AndERC223.sol";
 import "./interfaces/IERC998ERC20TopDown.sol";
@@ -19,6 +21,9 @@ contract ComposableTopDown is
     IERC998ERC20TopDown,
     IERC998ERC20TopDownEnumerable
 {
+    using Address for address;
+    using EnumerableSet for EnumerableSet.UintSet;
+    using EnumerableSet for EnumerableSet.AddressSet;
     // return this.rootOwnerOf.selector ^ this.rootOwnerOfChild.selector ^
     //   this.tokenOwnerOf.selector ^ this.ownerOfChild.selector;
     bytes4 constant ERC998_MAGIC_VALUE = 0xcd740db5;
@@ -55,18 +60,14 @@ contract ComposableTopDown is
     //new version
     bytes4 constant ERC721_RECEIVED_NEW = 0x150b7a02;
 
+    bytes4 constant ALLOWANCE = bytes4(keccak256("allowance(address,address)"));
+    bytes4 constant APPROVE = bytes4(keccak256("approve(address,uint256)"));
+    bytes4 constant ROOT_OWNER_OF_CHILD =
+        bytes4(keccak256("rootOwnerOfChild(address,uint256)"));
+
     ////////////////////////////////////////////////////////
     // ERC721 implementation
     ////////////////////////////////////////////////////////
-
-    function isContract(address _addr) internal view returns (bool) {
-        uint256 size;
-        assembly {
-            size := extcodesize(_addr)
-        }
-        return size > 0;
-    }
-
     function rootOwnerOf(uint256 _tokenId)
         public
         view
@@ -105,12 +106,17 @@ contract ComposableTopDown is
             );
         }
         bytes memory callData =
-            abi.encodeWithSelector(0xed81cdda, address(this), _childTokenId);
-        // 0xed81cdda == rootOwnerOfChild(address,uint256)
+            abi.encodeWithSelector(
+                ROOT_OWNER_OF_CHILD,
+                address(this),
+                _childTokenId
+            );
         (bool callSuccess, bytes memory data) =
             rootOwnerAddress.staticcall(callData);
         if (callSuccess) {
-            rootOwner = abi.decode(data, (bytes32));
+            assembly {
+                rootOwner := mload(add(data, 0x20))
+            }
         }
 
         if (callSuccess == true && rootOwner >> 224 == ERC998_MAGIC_VALUE) {
@@ -135,7 +141,10 @@ contract ComposableTopDown is
         returns (address tokenOwner)
     {
         tokenOwner = tokenIdToTokenOwner[_tokenId];
-        require(tokenOwner != address(0));
+        require(
+            tokenOwner != address(0),
+            "ComposableTopDown: owner of zero address"
+        );
         return tokenOwner;
     }
 
@@ -145,7 +154,10 @@ contract ComposableTopDown is
         override
         returns (uint256)
     {
-        require(_tokenOwner != address(0));
+        require(
+            _tokenOwner != address(0),
+            "ComposableTopDown: balance of zero address"
+        );
         return tokenOwnerToTokenCount[_tokenOwner];
     }
 
@@ -153,7 +165,8 @@ contract ComposableTopDown is
         address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         require(
             rootOwner == msg.sender ||
-                tokenOwnerToOperators[rootOwner][msg.sender]
+                tokenOwnerToOperators[rootOwner][msg.sender],
+            "ComposableTopDown: approve msg.sender not owner"
         );
         rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId] = _approved;
         emit Approval(rootOwner, _approved, _tokenId);
@@ -173,7 +186,10 @@ contract ComposableTopDown is
         external
         override
     {
-        require(_operator != address(0));
+        require(
+            _operator != address(0),
+            "ComposableTopDown: setApprovalForAll operator zero address"
+        );
         tokenOwnerToOperators[msg.sender][_operator] = _approved;
         emit ApprovalForAll(msg.sender, _operator, _approved);
     }
@@ -184,8 +200,14 @@ contract ComposableTopDown is
         override
         returns (bool)
     {
-        require(_owner != address(0));
-        require(_operator != address(0));
+        require(
+            _owner != address(0),
+            "ComposableTopDown: isApprovedForAll _owner zero address"
+        );
+        require(
+            _operator != address(0),
+            "ComposableTopDown: isApprovedForAll _operator zero address"
+        );
         return tokenOwnerToOperators[_owner][_operator];
     }
 
@@ -194,27 +216,43 @@ contract ComposableTopDown is
         address _to,
         uint256 _tokenId
     ) private {
-        require(_from != address(0));
-        require(tokenIdToTokenOwner[_tokenId] == _from);
-        require(_to != address(0));
+        require(
+            _from != address(0),
+            "ComposableTopDown: _transferFrom _from zero address"
+        );
+        require(
+            tokenIdToTokenOwner[_tokenId] == _from,
+            "ComposableTopDown: _transferFrom _from not owner"
+        );
+        require(
+            _to != address(0),
+            "ComposableTopDown: _transferFrom _to zero address"
+        );
 
         if (msg.sender != _from) {
-            // 0xed81cdda == rootOwnerOfChild(address,uint256)
             bytes memory callData =
-                abi.encodeWithSelector(0xed81cdda, address(this), _tokenId);
+                abi.encodeWithSelector(
+                    ROOT_OWNER_OF_CHILD,
+                    address(this),
+                    _tokenId
+                );
             (bool callSuccess, bytes memory data) = _from.staticcall(callData);
             if (callSuccess == true) {
-                bytes32 rootOwner = abi.decode(data, (bytes32));
+                bytes32 rootOwner;
+                assembly {
+                    rootOwner := mload(add(data, 0x20))
+                }
                 require(
                     rootOwner >> 224 != ERC998_MAGIC_VALUE,
-                    "Token is child of other top down composable"
+                    "ComposableTopDown: _transferFrom token is child of other top down composable"
                 );
             }
 
             require(
                 tokenOwnerToOperators[_from][msg.sender] ||
                     rootOwnerAndTokenIdToApprovedAddress[_from][_tokenId] ==
-                    msg.sender
+                    msg.sender,
+                "ComposableTopDown: _transferFrom msg.sender not approved"
             );
         }
 
@@ -250,7 +288,7 @@ contract ComposableTopDown is
         uint256 _tokenId
     ) external override {
         _transferFrom(_from, _to, _tokenId);
-        if (isContract(_to)) {
+        if (_to.isContract()) {
             bytes4 retval =
                 IERC721Receiver(_to).onERC721Received(
                     msg.sender,
@@ -258,7 +296,10 @@ contract ComposableTopDown is
                     _tokenId,
                     ""
                 );
-            require(retval == ERC721_RECEIVED_OLD);
+            require(
+                retval == ERC721_RECEIVED_OLD,
+                "ComposableTopDown: safeTransferFrom(3) onERC721Received invalid return value"
+            );
         }
     }
 
@@ -269,7 +310,7 @@ contract ComposableTopDown is
         bytes memory _data
     ) external override {
         _transferFrom(_from, _to, _tokenId);
-        if (isContract(_to)) {
+        if (_to.isContract()) {
             bytes4 retval =
                 IERC721Receiver(_to).onERC721Received(
                     msg.sender,
@@ -277,7 +318,10 @@ contract ComposableTopDown is
                     _tokenId,
                     _data
                 );
-            require(retval == ERC721_RECEIVED_OLD);
+            require(
+                retval == ERC721_RECEIVED_OLD,
+                "ComposableTopDown: safeTransferFrom(4) onERC721Received invalid return value"
+            );
         }
     }
 
@@ -286,17 +330,11 @@ contract ComposableTopDown is
     ////////////////////////////////////////////////////////
 
     // tokenId => child contract
-    mapping(uint256 => address[]) private childContracts;
-
-    // tokenId => (child address => contract index+1)
-    mapping(uint256 => mapping(address => uint256)) private childContractIndex;
+    mapping(uint256 => EnumerableSet.AddressSet) private childContracts;
 
     // tokenId => (child address => array of child tokens)
-    mapping(uint256 => mapping(address => uint256[])) private childTokens;
-
-    // tokenId => (child address => (child token => child index+1)
-    mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
-        private childTokenIndex;
+    mapping(uint256 => mapping(address => EnumerableSet.UintSet))
+        private childTokens;
 
     // child address => childId => tokenId
     mapping(address => mapping(uint256 => uint256)) internal childTokenOwner;
@@ -306,39 +344,15 @@ contract ComposableTopDown is
         address _childContract,
         uint256 _childTokenId
     ) private {
-        uint256 tokenIndex =
-            childTokenIndex[_tokenId][_childContract][_childTokenId];
-        require(tokenIndex != 0, "Child token not owned by token.");
-
         // remove child token
         uint256 lastTokenIndex =
-            childTokens[_tokenId][_childContract].length - 1;
-        uint256 lastToken =
-            childTokens[_tokenId][_childContract][lastTokenIndex];
-        if (_childTokenId == lastToken) {
-            childTokens[_tokenId][_childContract][tokenIndex - 1] = lastToken;
-            childTokenIndex[_tokenId][_childContract][lastToken] = tokenIndex;
-        }
-        // childTokens[_tokenId][_childContract].length--;
-        // added:
-        childTokens[_tokenId][_childContract].pop();
-        delete childTokenIndex[_tokenId][_childContract][_childTokenId];
+            childTokens[_tokenId][_childContract].length() - 1;
+        childTokens[_tokenId][_childContract].remove(_childTokenId);
         delete childTokenOwner[_childContract][_childTokenId];
 
         // remove contract
         if (lastTokenIndex == 0) {
-            uint256 lastContractIndex = childContracts[_tokenId].length - 1;
-            address lastContract = childContracts[_tokenId][lastContractIndex];
-            if (_childContract != lastContract) {
-                uint256 contractIndex =
-                    childContractIndex[_tokenId][_childContract];
-                childContracts[_tokenId][contractIndex] = lastContract;
-                childContractIndex[_tokenId][lastContract] = contractIndex;
-            }
-            // childContracts[_tokenId].length--;
-            // added:
-            childContracts[_tokenId].pop();
-            delete childContractIndex[_tokenId][_childContract];
+            childContracts[_tokenId].remove(_childContract);
         }
     }
 
@@ -351,16 +365,24 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId),
+            "ComposableTopDown: safeTransferChild(4) _childContract _childTokenId not found"
         );
-        require(tokenId == _fromTokenId);
-        require(_to != address(0));
+        require(
+            tokenId == _fromTokenId,
+            "ComposableTopDown: safeTransferChild(4) wrong tokenId found"
+        );
+        require(
+            _to != address(0),
+            "ComposableTopDown: safeTransferChild(4) _to zero address"
+        );
         address rootOwner = address(uint160(uint256(rootOwnerOf(tokenId))));
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
                 rootOwnerAndTokenIdToApprovedAddress[rootOwner][tokenId] ==
-                msg.sender
+                msg.sender,
+            "ComposableTopDown: safeTransferChild(4) msg.sender not eligible"
         );
         removeChild(tokenId, _childContract, _childTokenId);
         IERC721(_childContract).safeTransferFrom(
@@ -381,16 +403,24 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId),
+            "ComposableTopDown: safeTransferChild(5) _childContract _childTokenId not found"
         );
-        require(tokenId == _fromTokenId);
-        require(_to != address(0));
+        require(
+            tokenId == _fromTokenId,
+            "ComposableTopDown: safeTransferChild(5) wrong tokenId found"
+        );
+        require(
+            _to != address(0),
+            "ComposableTopDown: safeTransferChild(5) _to zero address"
+        );
         address rootOwner = address(uint160(uint256(rootOwnerOf(tokenId))));
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
                 rootOwnerAndTokenIdToApprovedAddress[rootOwner][tokenId] ==
-                msg.sender
+                msg.sender,
+            "ComposableTopDown: safeTransferChild(5) msg.sender not eligible"
         );
         removeChild(tokenId, _childContract, _childTokenId);
         IERC721(_childContract).safeTransferFrom(
@@ -411,30 +441,32 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId),
+            "ComposableTopDown: transferChild _childContract _childTokenId not found"
         );
-        require(tokenId == _fromTokenId);
-        require(_to != address(0));
+        require(
+            tokenId == _fromTokenId,
+            "ComposableTopDown: transferChild wrong tokenId found"
+        );
+        require(
+            _to != address(0),
+            "ComposableTopDown: transferChild _to zero address"
+        );
         address rootOwner = address(uint160(uint256(rootOwnerOf(tokenId))));
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
                 rootOwnerAndTokenIdToApprovedAddress[rootOwner][tokenId] ==
-                msg.sender
+                msg.sender,
+            "ComposableTopDown: transferChild msg.sender not eligible"
         );
         removeChild(tokenId, _childContract, _childTokenId);
         //this is here to be compatible with cryptokitties and other old contracts that require being owner and approved
         // before transferring.
         //does not work with current standard which does not allow approving self, so we must let it fail in that case.
-        //0x095ea7b3 == "approve(address,uint256)"
         bytes memory callData =
-            abi.encodeWithSelector(0x095ea7b3, this, _childTokenId);
+            abi.encodeWithSelector(APPROVE, this, _childTokenId);
         (bool callSuccess, bytes memory data) = _childContract.call(callData);
-        require(
-            callSuccess == true &&
-                (data.length == 0 || abi.decode(data, (bool))),
-            "failed to approve"
-        );
 
         IERC721(_childContract).transferFrom(address(this), _to, _childTokenId);
         emit TransferChild(tokenId, _to, _childContract, _childTokenId);
@@ -451,16 +483,24 @@ contract ComposableTopDown is
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
-                childTokenIndex[tokenId][_childContract][_childTokenId] > 0
+                childTokens[tokenId][_childContract].contains(_childTokenId),
+            "ComposableTopDown: transferChildToParent _childContract _childTokenId not found"
         );
-        require(tokenId == _fromTokenId);
-        require(_toContract != address(0));
+        require(
+            tokenId == _fromTokenId,
+            "ComposableTopDown: transferChildToParent wrong tokenId found"
+        );
+        require(
+            _toContract != address(0),
+            "ComposableTopDown: transferChildToParent _toContract zero address"
+        );
         address rootOwner = address(uint160(uint256(rootOwnerOf(tokenId))));
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
                 rootOwnerAndTokenIdToApprovedAddress[rootOwner][tokenId] ==
-                msg.sender
+                msg.sender,
+            "ComposableTopDown: transferChildToParent msg.sender not eligible"
         );
         removeChild(_fromTokenId, _childContract, _childTokenId);
         IERC998ERC721BottomUp(_childContract).transferToParent(
@@ -489,7 +529,9 @@ contract ComposableTopDown is
         require(
             _from == msg.sender ||
                 IERC721(_childContract).isApprovedForAll(_from, msg.sender) ||
-                IERC721(_childContract).getApproved(_childTokenId) == msg.sender
+                IERC721(_childContract).getApproved(_childTokenId) ==
+                msg.sender,
+            "ComposableTopDown: getChild msg.sender not approved"
         );
         IERC721(_childContract).transferFrom(
             _from,
@@ -501,11 +543,11 @@ contract ComposableTopDown is
     function onERC721Received(
         address _from,
         uint256 _childTokenId,
-        bytes memory _data
+        bytes calldata _data
     ) external returns (bytes4) {
         require(
             _data.length > 0,
-            "_data must contain the uint256 tokenId to transfer the child token to."
+            "ComposableTopDown: onERC721Received(3) _data must contain the uint256 tokenId to transfer the child token to"
         );
         // convert up to 32 bytes of_data to uint256, owner nft tokenId passed as uint in bytes
         uint256 tokenId;
@@ -518,7 +560,7 @@ contract ComposableTopDown is
         receiveChild(_from, tokenId, msg.sender, _childTokenId);
         require(
             IERC721(msg.sender).ownerOf(_childTokenId) != address(0),
-            "Child token not owned."
+            "ComposableTopDown: onERC721Received(3) child token not owned"
         );
         return ERC721_RECEIVED_OLD;
     }
@@ -527,11 +569,11 @@ contract ComposableTopDown is
         address _operator,
         address _from,
         uint256 _childTokenId,
-        bytes memory _data
+        bytes calldata _data
     ) external override returns (bytes4) {
         require(
             _data.length > 0,
-            "_data must contain the uint256 tokenId to transfer the child token to."
+            "ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to"
         );
         // convert up to 32 bytes of_data to uint256, owner nft tokenId passed as uint in bytes
         uint256 tokenId;
@@ -544,7 +586,7 @@ contract ComposableTopDown is
         receiveChild(_from, tokenId, msg.sender, _childTokenId);
         require(
             IERC721(msg.sender).ownerOf(_childTokenId) != address(0),
-            "Child token not owned."
+            "ComposableTopDown: onERC721Received(4) child token not owned"
         );
         return ERC721_RECEIVED_NEW;
     }
@@ -557,25 +599,18 @@ contract ComposableTopDown is
     ) private {
         require(
             tokenIdToTokenOwner[_tokenId] != address(0),
-            "_tokenId does not exist."
+            "ComposableTopDown: receiveChild _tokenId does not exist."
         );
         require(
-            childTokenIndex[_tokenId][_childContract][_childTokenId] == 0,
-            "Cannot receive child token because it has already been received."
+            !childTokens[_tokenId][_childContract].contains(_childTokenId),
+            "ComposableTopDown: receiveChild _childTokenId already received"
         );
         uint256 childTokensLength =
-            childTokens[_tokenId][_childContract].length;
+            childTokens[_tokenId][_childContract].length();
         if (childTokensLength == 0) {
-            childContractIndex[_tokenId][_childContract] = childContracts[
-                _tokenId
-            ]
-                .length;
-            childContracts[_tokenId].push(_childContract);
+            childContracts[_tokenId].add(_childContract);
         }
-        childTokens[_tokenId][_childContract].push(_childTokenId);
-        childTokenIndex[_tokenId][_childContract][_childTokenId] =
-            childTokensLength +
-            1;
+        childTokens[_tokenId][_childContract].add(_childTokenId);
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
     }
@@ -588,8 +623,10 @@ contract ComposableTopDown is
         parentTokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             parentTokenId > 0 ||
-                childTokenIndex[parentTokenId][_childContract][_childTokenId] >
-                0
+                childTokens[parentTokenId][_childContract].contains(
+                    _childTokenId
+                ),
+            "ComposableTopDown: _ownerOfChild not found"
         );
         return (tokenIdToTokenOwner[parentTokenId], parentTokenId);
     }
@@ -603,8 +640,10 @@ contract ComposableTopDown is
         parentTokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             parentTokenId > 0 ||
-                childTokenIndex[parentTokenId][_childContract][_childTokenId] >
-                0
+                childTokens[parentTokenId][_childContract].contains(
+                    _childTokenId
+                ),
+            "ComposableTopDown: ownerOfChild not found"
         );
         return (
             (ERC998_MAGIC_VALUE << 224) |
@@ -619,7 +658,7 @@ contract ComposableTopDown is
         returns (bool)
     {
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
-        return childTokenIndex[tokenId][_childContract][_childTokenId] != 0;
+        return childTokens[tokenId][_childContract].contains(_childTokenId);
     }
 
     function totalChildContracts(uint256 _tokenId)
@@ -628,7 +667,7 @@ contract ComposableTopDown is
         override
         returns (uint256)
     {
-        return childContracts[_tokenId].length;
+        return childContracts[_tokenId].length();
     }
 
     function childContractByIndex(uint256 _tokenId, uint256 _index)
@@ -637,11 +676,7 @@ contract ComposableTopDown is
         override
         returns (address childContract)
     {
-        require(
-            _index < childContracts[_tokenId].length,
-            "Contract address does not exist for this token and index."
-        );
-        return childContracts[_tokenId][_index];
+        return childContracts[_tokenId].at(_index);
     }
 
     function totalChildTokens(uint256 _tokenId, address _childContract)
@@ -650,7 +685,7 @@ contract ComposableTopDown is
         override
         returns (uint256)
     {
-        return childTokens[_tokenId][_childContract].length;
+        return childTokens[_tokenId][_childContract].length();
     }
 
     function childTokenByIndex(
@@ -658,11 +693,7 @@ contract ComposableTopDown is
         address _childContract,
         uint256 _index
     ) external view override returns (uint256 childTokenId) {
-        require(
-            _index < childTokens[_tokenId][_childContract].length,
-            "Token does not own a child token at contract address and index."
-        );
-        return childTokens[_tokenId][_childContract][_index];
+        return childTokens[_tokenId][_childContract].at(_index);
     }
 
     ////////////////////////////////////////////////////////
@@ -670,10 +701,7 @@ contract ComposableTopDown is
     ////////////////////////////////////////////////////////
 
     // tokenId => token contract
-    mapping(uint256 => address[]) erc20Contracts;
-
-    // tokenId => (token contract => token contract index)
-    mapping(uint256 => mapping(address => uint256)) erc20ContractIndex;
+    mapping(uint256 => EnumerableSet.AddressSet) erc20Contracts;
 
     // tokenId => (token contract => balance)
     mapping(uint256 => mapping(address => uint256)) erc20Balances;
@@ -698,23 +726,12 @@ contract ComposableTopDown is
         uint256 erc20Balance = erc20Balances[_tokenId][_erc20Contract];
         require(
             erc20Balance >= _value,
-            "Not enough token available to transfer."
+            "ComposableTopDown: removeERC20 value not enough"
         );
         uint256 newERC20Balance = erc20Balance - _value;
         erc20Balances[_tokenId][_erc20Contract] = newERC20Balance;
         if (newERC20Balance == 0) {
-            uint256 lastContractIndex = erc20Contracts[_tokenId].length - 1;
-            address lastContract = erc20Contracts[_tokenId][lastContractIndex];
-            if (_erc20Contract != lastContract) {
-                uint256 contractIndex =
-                    erc20ContractIndex[_tokenId][_erc20Contract];
-                erc20Contracts[_tokenId][contractIndex] = lastContract;
-                erc20ContractIndex[_tokenId][lastContract] = contractIndex;
-            }
-            // erc20Contracts[_tokenId].length--;
-            // added:
-            erc20Contracts[_tokenId].pop();
-            delete erc20ContractIndex[_tokenId][_erc20Contract];
+            erc20Contracts[_tokenId].remove(_erc20Contract);
         }
     }
 
@@ -724,18 +741,22 @@ contract ComposableTopDown is
         address _erc20Contract,
         uint256 _value
     ) external override {
-        require(_to != address(0));
+        require(
+            _to != address(0),
+            "ComposableTopDown: transferERC20 _to zero address"
+        );
         address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
                 rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId] ==
-                msg.sender
+                msg.sender,
+            "ComposableTopDown: transferERC20 msg.sender not eligible"
         );
         removeERC20(_tokenId, _erc20Contract, _value);
         require(
             IERC20AndERC223(_erc20Contract).transfer(_to, _value),
-            "ERC20 transfer failed."
+            "ComposableTopDown: transferERC20 transfer failed"
         );
         emit TransferERC20(_tokenId, _to, _erc20Contract, _value);
     }
@@ -748,18 +769,22 @@ contract ComposableTopDown is
         uint256 _value,
         bytes memory _data
     ) external override {
-        require(_to != address(0));
+        require(
+            _to != address(0),
+            "ComposableTopDown: transferERC223 _to zero address"
+        );
         address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
                 rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId] ==
-                msg.sender
+                msg.sender,
+            "ComposableTopDown: transferERC223 msg.sender not eligible"
         );
         removeERC20(_tokenId, _erc223Contract, _value);
         require(
             IERC20AndERC223(_erc223Contract).transfer(_to, _value, _data),
-            "ERC223 transfer failed."
+            "ComposableTopDown: transferERC223 transfer failed"
         );
         emit TransferERC20(_tokenId, _to, _erc223Contract, _value);
     }
@@ -773,17 +798,25 @@ contract ComposableTopDown is
     ) public override {
         bool allowed = _from == msg.sender;
         if (!allowed) {
-            // 0xdd62ed3e == allowance(address,address)
             bytes memory callData =
-                abi.encodeWithSelector(0xdd62ed3e, _from, msg.sender);
+                abi.encodeWithSelector(ALLOWANCE, _from, msg.sender);
             (bool callSuccess, bytes memory data) =
                 _erc20Contract.staticcall(callData);
-            require(callSuccess, "call to allowance failed");
-            uint256 remaining = abi.decode(data, (uint256));
-            require(remaining >= _value, "Value greater than remaining");
+            require(
+                callSuccess,
+                "ComposableTopDown: getERC20 allowance failed"
+            );
+            uint256 remaining;
+            assembly {
+                remaining := mload(add(data, 0x20))
+            }
+            require(
+                remaining >= _value,
+                "ComposableTopDown: getERC20 value greater than remaining"
+            );
             allowed = true;
         }
-        require(allowed, "not allowed to getERC20");
+        require(allowed, "ComposableTopDown: getERC20 not allowed to getERC20");
         erc20Received(_from, _tokenId, _erc20Contract, _value);
         require(
             IERC20AndERC223(_erc20Contract).transferFrom(
@@ -791,7 +824,7 @@ contract ComposableTopDown is
                 address(this),
                 _value
             ),
-            "ERC20 transfer failed."
+            "ComposableTopDown: getERC20 transfer failed"
         );
     }
 
@@ -803,18 +836,14 @@ contract ComposableTopDown is
     ) private {
         require(
             tokenIdToTokenOwner[_tokenId] != address(0),
-            "_tokenId does not exist."
+            "ComposableTopDown: erc20Received _tokenId does not exist"
         );
         if (_value == 0) {
             return;
         }
         uint256 erc20Balance = erc20Balances[_tokenId][_erc20Contract];
         if (erc20Balance == 0) {
-            erc20ContractIndex[_tokenId][_erc20Contract] = erc20Contracts[
-                _tokenId
-            ]
-                .length;
-            erc20Contracts[_tokenId].push(_erc20Contract);
+            erc20Contracts[_tokenId].add(_erc20Contract);
         }
         erc20Balances[_tokenId][_erc20Contract] += _value;
         emit ReceivedERC20(_from, _tokenId, _erc20Contract, _value);
@@ -828,9 +857,12 @@ contract ComposableTopDown is
     ) external override {
         require(
             _data.length > 0,
-            "_data must contain the uint256 tokenId to transfer the token to."
+            "ComposableTopDown: tokenFallback _data must contain the uint256 tokenId to transfer the token to"
         );
-        require(isContract(msg.sender), "msg.sender is not a contract");
+        require(
+            address(msg.sender).isContract(),
+            "ComposableTopDown: tokenFallback msg.sender is not a contract"
+        );
         /**************************************
          * TODO move to library
          **************************************/
@@ -852,11 +884,7 @@ contract ComposableTopDown is
         override
         returns (address)
     {
-        require(
-            _index < erc20Contracts[_tokenId].length,
-            "Contract address does not exist for this token and index."
-        );
-        return erc20Contracts[_tokenId][_index];
+        return erc20Contracts[_tokenId].at(_index);
     }
 
     function totalERC20Contracts(uint256 _tokenId)
@@ -865,6 +893,6 @@ contract ComposableTopDown is
         override
         returns (uint256)
     {
-        return erc20Contracts[_tokenId].length;
+        return erc20Contracts[_tokenId].length();
     }
 }

@@ -33,7 +33,7 @@ interface IERC998ERC721TopDown {
         address _operator,
         address _from,
         uint256 _childTokenId,
-        bytes memory _data
+        bytes calldata _data
     ) external returns (bytes4);
 
     function transferChild(
