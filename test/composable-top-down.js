@@ -10,12 +10,13 @@ describe('ComposableTopDown', async () => {
     const bob = accounts[2].signer;
     const owner = accounts[9];
     const nonUsed = accounts[8].signer;
-    const zeroAddress = "0x0000000000000000000000000000000000000000";
+    const zeroAddress = ethers.utils.hexZeroPad('0x0', 20);
 
     const expectedTokenId = 1;
     const firstChildTokenId = 1;
     const aliceBalance = 1;
-    const bytesFirstToken = '0x0000000000000000000000000000000000000001';  // todo: fix bytes variable
+    const aliceBytes32Address = ethers.utils.hexZeroPad(alice.address, 32).toLowerCase();
+    const bytesFirstToken = ethers.utils.hexZeroPad('0x1', 20);
 
     const NFTHash = '0x1234';
 
@@ -68,7 +69,7 @@ describe('ComposableTopDown', async () => {
                     alice.address,
                     composableTopDownInstance.contractAddress,
                     expectedTokenId,
-                    bytesFirstToken); //todo: fix bytes variable
+                    bytesFirstToken);
 
             // then:
             const childExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
@@ -159,7 +160,7 @@ describe('ComposableTopDown', async () => {
                 const secondToken = 2;
                 const secondChildTokenId = 2;
                 const secondNFTHash = '0x5678';
-                const bytesSecondToken = '0x0000000000000000000000000000000000000002';
+                const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
 
                 beforeEach(async () => {
                     await composableTopDownInstance.mint(alice.address);
@@ -180,6 +181,9 @@ describe('ComposableTopDown', async () => {
 
                     const ownerOfChild = await composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, secondChildTokenId);
                     assert(ownerOfChild.parentTokenId.eq(secondToken), 'Invalid parent token id');
+
+                    const rootOwnerOfChild = await composableTopDownInstance.rootOwnerOfChild(sampleNFTInstance.contractAddress, secondChildTokenId);
+                    assert(rootOwnerOfChild === aliceBytes32Address, 'Invalid root owner of second child token');
 
                     const totalChildContracts = await composableTopDownInstance.totalChildContracts(secondToken);
                     assert(totalChildContracts.eq(1), 'Invalid total child contracts');
