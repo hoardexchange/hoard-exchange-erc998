@@ -325,6 +325,23 @@ contract ComposableTopDown is
         }
     }
 
+    function _parseTokenId(bytes memory _data, uint256 _position)
+        private
+        pure
+        returns (uint256)
+    {
+        // convert up to 32 bytes of_data to uint256, owner nft tokenId passed as uint in bytes
+        uint256 tokenId;
+        assembly {
+            tokenId := calldataload(_position)
+        }
+        if (_data.length < 32) {
+            tokenId = tokenId >> (256 - _data.length * 8);
+        }
+
+        return tokenId;
+    }
+
     ////////////////////////////////////////////////////////
     // ERC998ERC721 and ERC998ERC721Enumerable implementation
     ////////////////////////////////////////////////////////
@@ -550,13 +567,7 @@ contract ComposableTopDown is
             "ComposableTopDown: onERC721Received(3) _data must contain the uint256 tokenId to transfer the child token to"
         );
         // convert up to 32 bytes of_data to uint256, owner nft tokenId passed as uint in bytes
-        uint256 tokenId;
-        assembly {
-            tokenId := calldataload(132)
-        }
-        if (_data.length < 32) {
-            tokenId = tokenId >> (256 - _data.length * 8);
-        }
+        uint256 tokenId = _parseTokenId(_data, 132);
         receiveChild(_from, tokenId, msg.sender, _childTokenId);
         require(
             IERC721(msg.sender).ownerOf(_childTokenId) != address(0),
@@ -566,7 +577,7 @@ contract ComposableTopDown is
     }
 
     function onERC721Received(
-        address _operator,
+        address,
         address _from,
         uint256 _childTokenId,
         bytes calldata _data
@@ -576,13 +587,7 @@ contract ComposableTopDown is
             "ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to"
         );
         // convert up to 32 bytes of_data to uint256, owner nft tokenId passed as uint in bytes
-        uint256 tokenId;
-        assembly {
-            tokenId := calldataload(164)
-        }
-        if (_data.length < 32) {
-            tokenId = tokenId >> (256 - _data.length * 8);
-        }
+        uint256 tokenId = _parseTokenId(_data, 164);
         receiveChild(_from, tokenId, msg.sender, _childTokenId);
         require(
             IERC721(msg.sender).ownerOf(_childTokenId) != address(0),
@@ -863,18 +868,7 @@ contract ComposableTopDown is
             address(msg.sender).isContract(),
             "ComposableTopDown: tokenFallback msg.sender is not a contract"
         );
-        /**************************************
-         * TODO move to library
-         **************************************/
-        // convert up to 32 bytes of_data to uint256, owner nft tokenId passed as uint in bytes
-        uint256 tokenId;
-        assembly {
-            tokenId := calldataload(132)
-        }
-        if (_data.length < 32) {
-            tokenId = tokenId >> (256 - _data.length * 8);
-        }
-        //END TODO
+        uint256 tokenId = _parseTokenId(_data, 132);
         erc20Received(_from, tokenId, msg.sender, _value);
     }
 

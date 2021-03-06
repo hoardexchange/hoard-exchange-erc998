@@ -21,7 +21,7 @@ contract SampleERC20 is ERC20 {
         address _to,
         uint256 _value,
         bytes memory _data
-    ) external {
+    ) external returns (bool) {
         _transfer(msg.sender, _to, _value);
 
         if (_to.isContract()) {
@@ -29,5 +29,7 @@ contract SampleERC20 is ERC20 {
             IERC223Receiver receiver = IERC223Receiver(_to);
             receiver.tokenFallback(msg.sender, _value, _data);
         }
+
+        return true;
     }
 }
