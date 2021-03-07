@@ -75,7 +75,10 @@ contract ComposableBottomUp is
         )
     {
         tokenOwner = tokenIdToTokenOwner[_tokenId].tokenOwner;
-        require(tokenOwner != address(0));
+        require(
+            tokenOwner != address(0),
+            "ComposableBottomUp: _tokenOwnerOf tokenOwner zero address"
+        );
         parentTokenId = tokenIdToTokenOwner[_tokenId].parentTokenId;
         if (parentTokenId > 0) {
             isParent = true;
@@ -97,7 +100,7 @@ contract ComposableBottomUp is
         )
     {
         address tokenOwnerAddress = tokenIdToTokenOwner[_tokenId].tokenOwner;
-        require(tokenOwnerAddress != address(0));
+        require(tokenOwnerAddress != address(0), "ComposableBottomUp: tokenOwnerOf tokenOwnerAddress zero address");
         parentTokenId = tokenIdToTokenOwner[_tokenId].parentTokenId;
         if (parentTokenId > 0) {
             isParent = true;
@@ -130,7 +133,10 @@ contract ComposableBottomUp is
         returns (bytes32 rootOwner)
     {
         address rootOwnerAddress = tokenIdToTokenOwner[_tokenId].tokenOwner;
-        require(rootOwnerAddress != address(0));
+        require(
+            rootOwnerAddress != address(0),
+            "ComposableBottomUp: rootOwnerOf rootOwnerAddress zero address"
+        );
         uint256 parentTokenId = tokenIdToTokenOwner[_tokenId].parentTokenId;
         bool isParent = parentTokenId > 0;
         parentTokenId--;
@@ -166,7 +172,9 @@ contract ComposableBottomUp is
             );
             (callSuccess, data) = rootOwnerAddress.staticcall(callData);
             if (callSuccess) {
-                rootOwner = abi.decode(data, (bytes32));
+                assembly {
+                    rootOwner := mload(add(data, 0x20))
+                }
             }
             if (callSuccess == true && rootOwner >> 224 == ERC998_MAGIC_VALUE) {
                 // Case 3: Token owner is top-down composable
@@ -184,7 +192,9 @@ contract ComposableBottomUp is
             callData = abi.encodeWithSelector(0x43a61a8e, parentTokenId);
             (callSuccess, data) = rootOwnerAddress.staticcall(callData);
             if (callSuccess) {
-                rootOwner = abi.decode(data, (bytes32));
+                assembly {
+                    rootOwner := mload(add(data, 0x20))
+                }
             }
             if (callSuccess == true && rootOwner >> 224 == ERC998_MAGIC_VALUE) {
                 // Case 6: Token owner is a bottom-up composable
@@ -198,7 +208,9 @@ contract ComposableBottomUp is
                 callData = abi.encodeWithSelector(0x6352211e, parentTokenId);
                 (callSuccess, data) = rootOwnerAddress.staticcall(callData);
                 if (callSuccess) {
-                    rootOwnerAddress = abi.decode(data, (address));
+                    assembly {
+                        rootOwnerAddress := mload(add(data, 0x20))
+                    }
                 }
                 require(callSuccess, "Call to ownerOf failed");
 
@@ -211,7 +223,9 @@ contract ComposableBottomUp is
 
                 (callSuccess, data) = rootOwnerAddress.staticcall(callData);
                 if (callSuccess) {
-                    rootOwner = abi.decode(data, (bytes32));
+                    assembly {
+                        rootOwner := mload(add(data, 0x20))
+                    }
                 }
                 if (
                     callSuccess == true &&
@@ -240,7 +254,10 @@ contract ComposableBottomUp is
     // returns the root owner at the top of the tree of composables
     function ownerOf(uint256 _tokenId) public view override returns (address) {
         address tokenOwner = tokenIdToTokenOwner[_tokenId].tokenOwner;
-        require(tokenOwner != address(0));
+        require(
+            tokenOwner != address(0),
+            "ComposableBottomUp: ownerOf tokenOwner zero address"
+        );
         return tokenOwner;
     }
 
@@ -250,17 +267,21 @@ contract ComposableBottomUp is
         override
         returns (uint256)
     {
-        require(_tokenOwner != address(0));
+        require(
+            _tokenOwner != address(0),
+            "ComposableBottomUp: balanceOf _tokenOwner zero address"
+        );
         return tokenOwnerToTokenCount[_tokenOwner];
     }
 
     function approve(address _approved, uint256 _tokenId) external override {
         address tokenOwner = tokenIdToTokenOwner[_tokenId].tokenOwner;
-        require(tokenOwner != address(0));
+        require(tokenOwner != address(0), "ComposableBottomUp: approve tokenOwner zero address");
         address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         require(
             rootOwner == msg.sender ||
-                tokenOwnerToOperators[rootOwner][msg.sender]
+                tokenOwnerToOperators[rootOwner][msg.sender],
+            "ComposableBottomUp: approve msg.sender not eligible"
         );
 
         rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId] = _approved;
@@ -281,7 +302,7 @@ contract ComposableBottomUp is
         external
         override
     {
-        require(_operator != address(0));
+        require(_operator != address(0), "ComposableBottomUp: setApprovalForAll _operator zero address");
         tokenOwnerToOperators[msg.sender][_operator] = _approved;
         emit ApprovalForAll(msg.sender, _operator, _approved);
     }
@@ -292,8 +313,8 @@ contract ComposableBottomUp is
         override
         returns (bool)
     {
-        require(_owner != address(0));
-        require(_operator != address(0));
+        require(_owner != address(0), "ComposableBottomUp: isApprovedForAll _owner zero address");
+        require(_operator != address(0), "ComposableBottomUp: isApprovedForAll _operator zero address");
         return tokenOwnerToOperators[_owner][_operator];
     }
 
@@ -328,7 +349,8 @@ contract ComposableBottomUp is
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
-                approvedAddress == msg.sender
+                approvedAddress == msg.sender,
+            "ComposableBottomUp: authenticateAndClearApproval msg.sender not eligible"
         );
 
         // clear approval
@@ -345,11 +367,11 @@ contract ComposableBottomUp is
         uint256 _tokenId,
         bytes memory _data
     ) external override {
-        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _fromContract);
-        require(_to != address(0));
+        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _fromContract, "ComposableBottomUp: transferFromParent tokenOwner != _fromContract");
+        require(_to != address(0), "ComposableBottomUp: transferFromParent _to zero address");
         uint256 parentTokenId = tokenIdToTokenOwner[_tokenId].parentTokenId;
-        require(parentTokenId != 0, "Token does not have a parent token.");
-        require(parentTokenId - 1 == _fromTokenId);
+        require(parentTokenId != 0, "ComposableBottomUp: transferFromParent token does not have a parent token.");
+        require(parentTokenId - 1 == _fromTokenId, "ComposableBottomUp: transferFromParent _fromTokenId not matching parentTokenId");
         authenticateAndClearApproval(_tokenId);
 
         // remove and transfer token
@@ -373,7 +395,7 @@ contract ComposableBottomUp is
                     _tokenId,
                     _data
                 );
-            require(retval == ERC721_RECEIVED);
+            require(retval == ERC721_RECEIVED, "ComposableBottomUp: transferFromParent onERC721Received invalid value");
         }
 
         emit Transfer(_fromContract, _to, _tokenId);
@@ -387,12 +409,12 @@ contract ComposableBottomUp is
         uint256 _tokenId,
         bytes memory _data
     ) external override {
-        require(_from != address(0));
-        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _from);
-        require(_toContract != address(0));
+        require(_from != address(0), "ComposableBottomUp: transferToParent _from zero address");
+        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _from, "ComposableBottomUp: transferToParent tokenOwner != _from");
+        require(_toContract != address(0), "ComposableBottomUp: transferToParent _toContract zero address");
         require(
             tokenIdToTokenOwner[_tokenId].parentTokenId == 0,
-            "Cannot transfer from address when owned by a token."
+            "ComposableBottomUp: transferToParent Cannot transfer from address when owned by a token."
         );
         address approvedAddress =
             rootOwnerAndTokenIdToApprovedAddress[_from][_tokenId];
@@ -402,15 +424,19 @@ contract ComposableBottomUp is
                 abi.encodeWithSelector(0xed81cdda, address(this), _tokenId);
             (bool callSuccess, bytes memory data) = _from.staticcall(callData);
             if (callSuccess == true) {
-                bytes32 rootOwner = abi.decode(data, (bytes32));
+                bytes32 rootOwner;
+                assembly {
+                    rootOwner := mload(add(data, 0x20))
+                }
                 require(
                     rootOwner >> 224 != ERC998_MAGIC_VALUE,
-                    "Token is child of other top down composable"
+                    "ComposableBottomUp: transferToParent Token is child of other top down composable"
                 );
             }
             require(
                 tokenOwnerToOperators[_from][msg.sender] ||
-                    approvedAddress == msg.sender
+                    approvedAddress == msg.sender,
+                    "ComposableBottomUp: transferToParent msg.sender is not eligible"
             );
         }
 
@@ -435,7 +461,7 @@ contract ComposableBottomUp is
 
         require(
             IERC721(_toContract).ownerOf(_toTokenId) != address(0),
-            "_toTokenId does not exist"
+            "ComposableBottomUp: transferToParent _toTokenId does not exist"
         );
 
         emit Transfer(_from, _toContract, _tokenId);
@@ -450,18 +476,19 @@ contract ComposableBottomUp is
         uint256 _tokenId,
         bytes memory _data
     ) external override {
-        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _fromContract);
-        require(_toContract != address(0));
+        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _fromContract, "ComposableBottomUp: transferAsChild tokenOwner != _fromContract");
+        require(_toContract != address(0), "ComposableBottomUp: transferAsChild _toContract zero address");
         uint256 parentTokenId = tokenIdToTokenOwner[_tokenId].parentTokenId;
-        require(parentTokenId > 0, "No parent token to transfer from.");
-        require(parentTokenId - 1 == _fromTokenId);
+        require(parentTokenId > 0, "ComposableBottomUp: transferAsChild No parent token to transfer from.");
+        require(parentTokenId - 1 == _fromTokenId, "ComposableBottomUp: transferAsChild parentTokenId != _fromTokenId");
         address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         address approvedAddress =
             rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId];
         require(
             rootOwner == msg.sender ||
                 tokenOwnerToOperators[rootOwner][msg.sender] ||
-                approvedAddress == msg.sender
+                approvedAddress == msg.sender,
+                "ComposableBottomUp: transferAsChild msg.sender not eligible"
         );
         // clear approval
         if (approvedAddress != address(0)) {
@@ -488,7 +515,7 @@ contract ComposableBottomUp is
 
         require(
             IERC721(_toContract).ownerOf(_toTokenId) != address(0),
-            "_toTokenId does not exist"
+            "ComposableBottomUp: transferAsChild _toTokenId does not exist"
         );
 
         emit Transfer(_fromContract, _toContract, _tokenId);
@@ -501,13 +528,13 @@ contract ComposableBottomUp is
         address _to,
         uint256 _tokenId
     ) private {
-        require(_from != address(0));
-        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _from);
+        require(_from != address(0), "ComposableBottomUp: _transferFrom _from zero address");
+        require(tokenIdToTokenOwner[_tokenId].tokenOwner == _from, "ComposableBottomUp: _transferFrom tokenOwner != _from");
         require(
             tokenIdToTokenOwner[_tokenId].parentTokenId == 0,
-            "Cannot transfer from address when owned by a token."
+            "ComposableBottomUp: _transferFrom Cannot transfer from address when owned by a token."
         );
-        require(_to != address(0));
+        require(_to != address(0), "ComposableBottomUp: _transferFrom _to zero address");
         address approvedAddress =
             rootOwnerAndTokenIdToApprovedAddress[_from][_tokenId];
         if (msg.sender != _from) {
@@ -516,15 +543,21 @@ contract ComposableBottomUp is
                 abi.encodeWithSelector(0xed81cdda, address(this), _tokenId);
             (bool callSuccess, bytes memory data) = _from.staticcall(callData);
             if (callSuccess == true) {
-                bytes32 rootOwner = abi.decode(data, (bytes32));
+                bytes32 rootOwner;
+                if (callSuccess) {
+                    assembly {
+                        rootOwner := mload(add(data, 0x20))
+                    }
+                }
                 require(
                     rootOwner >> 224 != ERC998_MAGIC_VALUE,
-                    "Token is child of other top down composable"
+                    "ComposableBottomUp: _transferFrom Token is child of other top down composable"
                 );
             }
             require(
                 tokenOwnerToOperators[_from][msg.sender] ||
-                    approvedAddress == msg.sender
+                    approvedAddress == msg.sender,
+                    "ComposableBottomUp: _transferFrom msg.sender not eligible"
             );
         }
 
@@ -566,7 +599,7 @@ contract ComposableBottomUp is
                     _tokenId,
                     ""
                 );
-            require(retval == ERC721_RECEIVED);
+            require(retval == ERC721_RECEIVED, "ComposableBottomUp: safeTransferFrom(3) onERC721Received invalid value");
         }
     }
 
@@ -585,7 +618,7 @@ contract ComposableBottomUp is
                     _tokenId,
                     _data
                 );
-            require(retval == ERC721_RECEIVED);
+            require(retval == ERC721_RECEIVED, "ComposableBottomUp: safeTransferFrom(4) onERC721Received invalid value");
         }
     }
 
@@ -605,7 +638,8 @@ contract ComposableBottomUp is
     ) public view override returns (uint256) {
         require(
             parentToChildTokenIds[_parentContract][_parentTokenId].length >
-                _index
+                _index,
+                "ComposableBottomUp: childTokenByIndex invalid _index"
         );
         return parentToChildTokenIds[_parentContract][_parentTokenId][_index];
     }

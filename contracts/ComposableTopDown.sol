@@ -145,7 +145,7 @@ contract ComposableTopDown is
         tokenOwner = tokenIdToTokenOwner[_tokenId];
         require(
             tokenOwner != address(0),
-            "ComposableTopDown: owner of zero address"
+            "ComposableTopDown: ownerOf _tokenId zero address"
         );
         return tokenOwner;
     }
@@ -158,7 +158,7 @@ contract ComposableTopDown is
     {
         require(
             _tokenOwner != address(0),
-            "ComposableTopDown: balance of zero address"
+            "ComposableTopDown: balanceOf _tokenOwner zero address"
         );
         return tokenOwnerToTokenCount[_tokenOwner];
     }
@@ -190,7 +190,7 @@ contract ComposableTopDown is
     {
         require(
             _operator != address(0),
-            "ComposableTopDown: setApprovalForAll operator zero address"
+            "ComposableTopDown: setApprovalForAll _operator zero address"
         );
         tokenOwnerToOperators[msg.sender][_operator] = _approved;
         emit ApprovalForAll(msg.sender, _operator, _approved);

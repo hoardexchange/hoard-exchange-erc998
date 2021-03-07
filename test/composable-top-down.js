@@ -49,7 +49,7 @@ describe('ComposableTopDown', async () => {
         });
 
         it('Should revert when trying to get balanceOf zero address', async () => {
-            const expectedRevertMessage = 'ComposableTopDown: balance of zero address';
+            const expectedRevertMessage = 'ComposableTopDown: balanceOf _tokenOwner zero address';
             await assert.revertWith(composableTopDownInstance.balanceOf(zeroAddress), expectedRevertMessage);
         });
 
@@ -180,7 +180,7 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should revert when trying to setApprovalForAll zero address', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: setApprovalForAll operator zero address';
+                const expectedRevertMessage = 'ComposableTopDown: setApprovalForAll _operator zero address';
                 await assert.revertWith(composableTopDownInstance.setApprovalForAll(zeroAddress, true), expectedRevertMessage);
             });
 
