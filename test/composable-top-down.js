@@ -48,6 +48,11 @@ describe('ComposableTopDown', async () => {
             await composableTopDownInstance.mint(alice.address);
         });
 
+        it('Should revert when trying to get balanceOf zero address', async () => {
+            const expectedRevertMessage = 'ComposableTopDown: balance of zero address';
+            await assert.revertWith(composableTopDownInstance.balanceOf(zeroAddress), expectedRevertMessage);
+        });
+
         it('Should deploy SampleNFT Contract and mint to alice', async () => {
             // then:
             assert.isAddress(
@@ -85,9 +90,45 @@ describe('ComposableTopDown', async () => {
             assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
         });
 
-        it('Should revert when trying to get balanceOf zero address', async () => {
-            const expectedRevertMessage = 'ComposableTopDown: balance of zero address';
-            await assert.revertWith(composableTopDownInstance.balanceOf(zeroAddress), expectedRevertMessage);
+        it('Should safeTransferFromOld SampleNFT to Composable', async () => {
+            // when:
+            await sampleNFTInstance.from(alice.address).safeTransferFromOld(
+                alice.address,
+                composableTopDownInstance.contractAddress,
+                expectedTokenId,
+                bytesFirstToken);
+
+            // then:
+            const childExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
+            assert(childExists, 'Composable does not own SampleNFT');
+
+            const ownerOfChild = await composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId);
+            assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid parent token id');
+
+            const totalChildContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
+            assert(totalChildContracts.eq(1), 'Invalid total child contracts');
+
+            const childContractAddress = await composableTopDownInstance.childContractByIndex(expectedTokenId, 0);
+            assert(childContractAddress === sampleNFTInstance.contractAddress, 'Invalid child contract address');
+
+            const tokenId = await composableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0);
+            assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
+        });
+
+        it('Should revert when trying to receive an erc721 with no data', async () => {
+            const expectedRevertMessage = 'ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to';
+            // await assert.revertWith(
+            //     sampleNFTInstance.from(alice.address).safeTransferFrom(
+            //         alice.address,
+            //         composableTopDownInstance.contractAddress,
+            //         expectedTokenId),
+            //     expectedRevertMessage);
+
+            await assert.revert(sampleNFTInstance.from(alice.address).safeTransferFrom(
+                alice.address,
+                composableTopDownInstance.contractAddress,
+                expectedTokenId),
+                expectedRevertMessage);
         });
 
         describe('Composable Approvals', async () => {
@@ -111,6 +152,7 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should successfully emit Approval event', async () => {
+                // given:
                 const expectedEvent = 'Approval';
 
                 // then:
@@ -121,9 +163,11 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should successfully emit Approval event arguments', async () => {
+                // given:
                 const expectedEvent = 'Approval';
                 const approvedAddress = bob.address;
 
+                // then:
                 await assert.emitWithArgs(
                     composableTopDownInstance.from(alice.address).approve(approvedAddress, expectedTokenId),
                     expectedEvent,
@@ -150,6 +194,7 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should successfully emit ApprovalForAll event', async () => {
+                // given:
                 const expectedEvent = 'ApprovalForAll';
 
                 // then:
@@ -160,6 +205,7 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should successfully emit ApprovalForAll event arguments', async () => {
+                // given:
                 const expectedEvent = 'ApprovalForAll';
 
                 // then:
@@ -182,6 +228,121 @@ describe('ComposableTopDown', async () => {
             it('Should revert isApprovedForAll _operator zero address', async () => {
                 const expectedRevertMessage = 'ComposableTopDown: isApprovedForAll _operator zero address';
                 await assert.revertWith(composableTopDownInstance.isApprovedForAll(owner.signer.address, zeroAddress), expectedRevertMessage);
+            });
+        });
+
+        describe('Composable getChild', async () => {
+            it('Should revert when trying to get unapproved', async () => {
+                const expectedRevertMessage = 'ComposableTopDown: getChild msg.sender not approved';
+
+                await assert.revertWith(
+                    composableTopDownInstance.from(bob.address)
+                        .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
+                    expectedRevertMessage);
+            });
+
+            it('Should revert when trying to get unapproved from SampleNFT', async () => {
+                const expectedRevertMessage = 'ERC721: transfer caller is not owner nor approved';
+                await assert.revertWith(
+                    composableTopDownInstance.from(alice.address)
+                        .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
+                    expectedRevertMessage);
+            });
+
+            it('Should revert when trying to get unapproved from SampleNFT', async () => {
+                const expectedRevertMessage = 'ERC721: transfer caller is not owner nor approved';
+                await assert.revertWith(
+                    composableTopDownInstance.from(alice.address)
+                        .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
+                    expectedRevertMessage);
+            });
+
+            it('Should successfully getChild', async () => {
+                // given:
+                await sampleNFTInstance.from(alice.address)
+                    .approve(composableTopDownInstance.contractAddress, expectedTokenId);
+
+                // when:
+                await composableTopDownInstance.from(alice.address)
+                    .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId);
+
+                //then:
+                const childExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
+                assert(childExists, 'Composable does not own SampleNFT');
+
+                const ownerOfChild = await composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId);
+                assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid parent token id');
+
+                const totalChildContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
+                assert(totalChildContracts.eq(1), 'Invalid total child contracts');
+
+                const childContractAddress = await composableTopDownInstance.childContractByIndex(expectedTokenId, 0);
+                assert(childContractAddress === sampleNFTInstance.contractAddress, 'Invalid child contract address');
+
+                const tokenId = await composableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0);
+                assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
+            });
+
+            it('Should successfully getChild using bob as intermediary for alice using setApprovalForAll', async () => {
+                // given:
+                await sampleNFTInstance.from(alice.address)
+                    .approve(composableTopDownInstance.contractAddress, expectedTokenId);
+
+                await sampleNFTInstance.from(alice.address)
+                    .setApprovalForAll(bob.address, true);
+
+                // when:
+                await composableTopDownInstance.from(bob.address)
+                    .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId);
+
+                //then:
+                const childExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
+                assert(childExists, 'Composable does not own SampleNFT');
+
+                const ownerOfChild = await composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId);
+                assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid parent token id');
+
+                const totalChildContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
+                assert(totalChildContracts.eq(1), 'Invalid total child contracts');
+
+                const childContractAddress = await composableTopDownInstance.childContractByIndex(expectedTokenId, 0);
+                assert(childContractAddress === sampleNFTInstance.contractAddress, 'Invalid child contract address');
+
+                const tokenId = await composableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0);
+                assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
+            });
+
+            it('Should emit ReceiveChild event', async () => {
+                // given:
+                await sampleNFTInstance.from(alice.address)
+                    .approve(composableTopDownInstance.contractAddress, expectedTokenId);
+                const expectedEvent = 'ReceivedChild';
+
+                // then:
+                await assert.emit(
+                    composableTopDownInstance.from(alice.address)
+                        .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
+                    expectedEvent);
+            });
+
+            it('Should emit ReceiveChild event arguments', async () => {
+                // given:
+                await sampleNFTInstance.from(alice.address)
+                    .approve(composableTopDownInstance.contractAddress, expectedTokenId);
+                const expectedEvent = 'ReceivedChild';
+
+                // then:
+                await assert.emitWithArgs(
+                    composableTopDownInstance.from(alice.address)
+                        .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
+                    expectedEvent,
+                    [
+                        alice.address,
+                        expectedTokenId,
+                        sampleNFTInstance.contractAddress,
+                        expectedTokenId
+                    ]
+                );
             });
         });
 
