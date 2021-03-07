@@ -371,7 +371,7 @@ describe('ComposableTopDown', async () => {
                 await assert.revertWith(composableTopDownInstance.transferFrom(alice.address, zeroAddress, expectedTokenId), expectedRevertMessage);
             });
 
-            it('Should successfully transferFrom', async () => {
+            it('Should successfully transferFrom to bob', async () => {
                 // when:
                 await composableTopDownInstance.from(alice.address).transferFrom(alice.address, bob.address, expectedTokenId);
 
@@ -550,6 +550,9 @@ describe('ComposableTopDown', async () => {
                 });
 
                 it('Should successfully safeTransferChild(5)', async () => {
+                    // given:
+                    const expectedRootOwnerOfChild = ethers.utils.hexZeroPad(alice.address, 32).toLowerCase();
+
                     // when:
                     await composableTopDownInstance
                         .from(alice.address)['safeTransferChild(uint256,address,address,uint256,bytes)'](
@@ -575,6 +578,9 @@ describe('ComposableTopDown', async () => {
 
                     const ownerOfChild = await composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, secondToken);
                     assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid SampleNFT child token 2 owner');
+
+                    const rootOwnerOfChild = await composableTopDownInstance.rootOwnerOfChild(zeroAddress, secondToken);
+                    assert(rootOwnerOfChild === expectedRootOwnerOfChild, 'Invalid rootOwnerOfChild token 2');
                 });
             });
         });
