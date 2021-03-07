@@ -384,10 +384,20 @@ describe('ComposableTopDown', async () => {
                 // given:
                 const contractIERC721ReceiverOldInstance = await deployer.deploy(ContractIERC721ReceiverOld, {});
 
+                const beforeTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
+                const beforeTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
+
                 // when:
                 await composableTopDownInstance.from(alice.address).safeTransferFrom(alice.address, contractIERC721ReceiverOldInstance.contractAddress, expectedTokenId);
                 // then:
-                // todo: assert transferFrom
+                const afterTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
+                assert(afterTransferContractBalance.eq(beforeTransferContractBalance.add(1)), 'Invalid contract balanceOf');
+
+                const afterTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
+                assert(afterTransferAliceBalance.eq(beforeTransferAliceBalance.sub(1)), 'Invalid alice balanceOf');
+
+                const ownerOf = await composableTopDownInstance.ownerOf(expectedTokenId);
+                assert(ownerOf === contractIERC721ReceiverOldInstance.contractAddress, 'Invalid token owner');
             });
 
             it('Should successfully safeTransferFrom(3) with bob used as intermediary', async () => {
@@ -395,10 +405,20 @@ describe('ComposableTopDown', async () => {
                 const contractIERC721ReceiverOldInstance = await deployer.deploy(ContractIERC721ReceiverOld, {});
                 await composableTopDownInstance.from(alice.address).approve(bob.address, expectedTokenId);
 
+                const beforeTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
+                const beforeTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
+
                 // when:
                 await composableTopDownInstance.from(bob.address).safeTransferFrom(alice.address, contractIERC721ReceiverOldInstance.contractAddress, expectedTokenId);
                 // then:
-                // todo: assert transferFrom
+                const afterTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
+                assert(afterTransferContractBalance.eq(beforeTransferContractBalance.add(1)), 'Invalid contract balanceOf');
+
+                const afterTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
+                assert(afterTransferAliceBalance.eq(beforeTransferAliceBalance.sub(1)), 'Invalid alice balanceOf');
+
+                const ownerOf = await composableTopDownInstance.ownerOf(expectedTokenId);
+                assert(ownerOf === contractIERC721ReceiverOldInstance.contractAddress, 'Invalid token owner');
             });
 
             it('Should revert when trying to safeTransferFrom(3) to a contract with no IERC721Receiavable', async () => {
@@ -418,6 +438,8 @@ describe('ComposableTopDown', async () => {
             it('Should successfully safeTransferFrom(4) to a contract', async () => {
                 // given:
                 const contractIERC721ReceiverOldInstance = await deployer.deploy(ContractIERC721ReceiverOld, {});
+                const beforeTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
+                const beforeTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
 
                 // when:
                 await composableTopDownInstance.from(alice.address)['safeTransferFrom(address,address,uint256,bytes)']
@@ -426,7 +448,14 @@ describe('ComposableTopDown', async () => {
                         expectedTokenId,
                         bytesFirstToken);
                 // then:
-                // todo: assert transferFrom
+                const afterTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
+                assert(afterTransferContractBalance.eq(beforeTransferContractBalance.add(1)), 'Invalid contract balanceOf');
+
+                const afterTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
+                assert(afterTransferAliceBalance.eq(beforeTransferAliceBalance.sub(1)), 'Invalid alice balanceOf');
+
+                const ownerOf = await composableTopDownInstance.ownerOf(expectedTokenId);
+                assert(ownerOf === contractIERC721ReceiverOldInstance.contractAddress, 'Invalid token owner');
             });
 
             it('Should revert when trying to safeTransferFrom(4) to a contract with no IERC721Receiavable', async () => {
