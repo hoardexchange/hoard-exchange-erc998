@@ -390,6 +390,17 @@ describe('ComposableTopDown', async () => {
                 // todo: assert transferFrom
             });
 
+            it('Should successfully safeTransferFrom(3) with bob used as intermediary', async () => {
+                // given:
+                const contractIERC721ReceiverOldInstance = await deployer.deploy(ContractIERC721ReceiverOld, {});
+                await composableTopDownInstance.from(alice.address).approve(bob.address, expectedTokenId);
+
+                // when:
+                await composableTopDownInstance.from(bob.address).safeTransferFrom(alice.address, contractIERC721ReceiverOldInstance.contractAddress, expectedTokenId);
+                // then:
+                // todo: assert transferFrom
+            });
+
             it('Should revert when trying to safeTransferFrom(3) to a contract with no IERC721Receiavable', async () => {
                 await assert.revert(composableTopDownInstance.from(alice.address).safeTransferFrom(alice.address, sampleNFTInstance.contractAddress, expectedTokenId));
             });
