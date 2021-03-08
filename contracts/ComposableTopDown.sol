@@ -536,7 +536,7 @@ contract ComposableTopDown is
             _data.length > 0,
             "ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to"
         );
-        // convert up to 32 bytes of_data to uint256, owner nft tokenId passed as uint in bytes
+        // convert up to 32 bytes of _data to uint256, owner nft tokenId passed as uint in bytes
         uint256 tokenId = _parseTokenId(_data, 164);
         receiveChild(_from, tokenId, msg.sender, _childTokenId);
         require(
