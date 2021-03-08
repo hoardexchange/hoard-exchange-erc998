@@ -116,15 +116,17 @@ describe('ComposableTopDown', async () => {
         });
 
         it('Should revert when trying to receive an erc721 with no data', async () => {
+            const erc721Instance = await deployer.deploy(ContractIERC721ReceiverOld, {});
+            await erc721Instance.mint721(alice.address);
             const expectedRevertMessage = 'ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to';
             // await assert.revertWith(
-            //     sampleNFTInstance.from(alice.address).safeTransferFrom(
+            //     erc721Instance.from(alice.address).safeTransferFrom(
             //         alice.address,
             //         composableTopDownInstance.contractAddress,
             //         expectedTokenId),
             //     expectedRevertMessage);
 
-            await assert.revert(sampleNFTInstance.from(alice.address).safeTransferFrom(
+            await assert.revert(erc721Instance.from(alice.address).safeTransferFrom(
                 alice.address,
                 composableTopDownInstance.contractAddress,
                 expectedTokenId),
@@ -510,7 +512,7 @@ describe('ComposableTopDown', async () => {
                 const secondToken = 2;
                 const secondChildTokenId = 2;
                 const secondNFTHash = '0x5678';
-                const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
+                const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 32);
                 const expectedFirstTokenTotalChildTokens = 1;
 
                 beforeEach(async () => {
@@ -561,6 +563,39 @@ describe('ComposableTopDown', async () => {
                             sampleNFTInstance.contractAddress,
                             secondToken,
                             bytesFirstToken
+                        );
+
+                    // then:
+                    const contractByIndex = await composableTopDownInstance.childContractByIndex(expectedTokenId, 0);
+                    assert(contractByIndex === sampleNFTInstance.contractAddress, 'Invalid child contract by index');
+
+                    const childExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, secondToken);
+                    assert(childExists, 'SecondToken does not exist as child to SampleNFT');
+
+                    const totalChildContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
+                    assert(totalChildContracts.eq(1), 'Invalid total child contracts');
+
+                    const owner = await sampleNFTInstance.ownerOf(secondToken);
+                    assert(owner === composableTopDownInstance.contractAddress, 'ComposableTopDown is not owner SecondToken');
+
+                    const ownerOfChild = await composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, secondToken);
+                    assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid SampleNFT child token 2 owner');
+
+                    const rootOwnerOfChild = await composableTopDownInstance.rootOwnerOfChild(zeroAddress, secondToken);
+                    assert(rootOwnerOfChild === expectedRootOwnerOfChild, 'Invalid rootOwnerOfChild token 2');
+                });
+
+                it('Should successfully safeTransferChild(4)', async () => {
+                    // given:
+                    const expectedRootOwnerOfChild = ethers.utils.hexZeroPad(alice.address, 32).toLowerCase();
+
+                    // when:
+                    await composableTopDownInstance
+                        .from(alice.address)['safeTransferChild(uint256,address,address,uint256)'](
+                            secondToken,
+                            composableTopDownInstance.contractAddress,
+                            sampleNFTInstance.contractAddress,
+                            secondToken
                         );
 
                     // then:

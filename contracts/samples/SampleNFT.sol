@@ -14,10 +14,12 @@ contract SampleNFT is ERC721 {
     Counters.Counter public _tokenIds;
     mapping(string => bool) public hashes;
 
+    uint256 data = 1;
+
     //old version
     bytes4 constant ERC721_RECEIVED_OLD = 0xf0b9e5ba;
 
-    constructor() public ERC721("RANDOM NAME", "RND") {}
+    constructor() public ERC721("Sample NFT", "NFT") {}
 
     /// wrapper on minting new 721
     function mint721(address _to, string memory _hash)
@@ -51,6 +53,15 @@ contract SampleNFT is ERC721 {
             _checkOnERC721ReceivedOld(from, to, tokenId, _data),
             "SampleNFT: transfer to non ERC721Receiver implementer"
         );
+    }
+
+    /// @dev mocked for ComposableTopDown safeTransferChild(4)
+    function safeTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId
+    ) public override {
+        safeTransferFrom(from, to, tokenId, abi.encode(data));
     }
 
     function _checkOnERC721ReceivedOld(
