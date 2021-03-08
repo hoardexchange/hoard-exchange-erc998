@@ -5,7 +5,7 @@ pragma solidity ^0.7.0;
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-import "./interfaces/IERC721ReceiverOld.sol";
+import "../interfaces/IERC721ReceiverOld.sol";
 
 contract SampleNFT is ERC721 {
     using Address for address;

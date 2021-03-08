@@ -5,7 +5,7 @@ pragma solidity ^0.7.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 
-import "./interfaces/IERC223Receiver.sol";
+import "../interfaces/IERC223Receiver.sol";
 
 contract SampleERC20 is ERC20 {
     using Address for address;
