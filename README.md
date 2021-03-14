@@ -33,10 +33,10 @@ etherlime compile --solcVersion=0.7.0 --runs 200
 
 ### Run Tests
 ```
-etherlime test
+etherlime test --timeout 10000
 ```
 
 ### Run Tests with Coverage
 ``` 
-etherlime coverage --solcVersion=0.7.0
+etherlime coverage --solcVersion=0.7.0 --timeout 10000
 ```

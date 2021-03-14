@@ -65,8 +65,6 @@ describe('ComposableTopDown', async () => {
 
             const balance = await composableTopDownInstance.balanceOf(alice.address);
             assert(balance.eq(aliceBalance), 'Invalid alice balance');
-
-            // todo: check that minted to alice
         });
 
         it('Should safeTransferFrom SampleNFT to Composable', async () => {
@@ -869,6 +867,111 @@ describe('ComposableTopDown', async () => {
             assert(erc20ComposableBalance.eq(composableBalance), 'Invalid ERC20 Composable balance');
         });
     });
+
+    describe('Multi Token tests', async () => {
+        const mintTokensAmount = 1000;
+        const transferAmount = 500;
+        const totalTokens = 5;
+        const mintedPerNFT = 3;
+
+        beforeEach(async () => {
+            await composableTopDownInstance.mint(alice.address);
+        });
+
+        it('Should return proper totals after addition and removal', async () => {
+            // given:
+            const composableOwnerId = await composableTopDownInstance.ownerOf(expectedTokenId);
+            const [nfts, erc20s] = await setupTestTokens(totalTokens, totalTokens);
+
+            // when:
+
+            // transfer erc20s
+            for (let i = 0; i < erc20s.length; i++) {
+                await erc20s[i].mint(alice.address, mintTokensAmount);
+                await erc20s[i].from(alice.address)['transfer(address,uint256,bytes)'](
+                    composableTopDownInstance.contractAddress,
+                    transferAmount,
+                    bytesFirstToken
+                );
+
+                const balance = await composableTopDownInstance.balanceOfERC20(expectedTokenId, erc20s[i].contractAddress);
+                assert(balance.eq(transferAmount), `Invalid balanceOfERC20 on Token ${i}`);
+            }
+
+            const totalERC20TokensAdded = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
+            assert(totalERC20TokensAdded.eq(totalTokens), 'Invalid Alice total ERC20 cotracts');
+
+            // transfer nfts
+            for (let i = 0; i < nfts.length; i++) {
+                for (let j = 0; j < mintedPerNFT; j++) {
+                    await nfts[i].mint721(alice.address, `${i}${j}`);
+                    const mintedTokenId = j + 1;
+                    await nfts[i].from(alice)['safeTransferFrom(address,address,uint256,bytes)'](
+                        alice.address,
+                        composableTopDownInstance.contractAddress,
+                        mintedTokenId,
+                        bytesFirstToken);
+                }
+                const nftChildren = await composableTopDownInstance.totalChildTokens(expectedTokenId, nfts[i].contractAddress);
+                assert(nftChildren.eq(mintedPerNFT), `Invalid nft children for ${i}`);
+            }
+
+            const totalChildContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
+            assert(totalChildContracts.eq(totalTokens), 'Invalid child tokens contracts count');
+
+            // remove erc20s
+            let tokenERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
+
+            for (let i = 0; i < tokenERC20Contracts; i++) {
+                const tokenAddress = await composableTopDownInstance.erc20ContractByIndex(expectedTokenId, i);
+                const balance = await composableTopDownInstance.balanceOfERC20(expectedTokenId, tokenAddress);
+
+                await composableTopDownInstance.from(alice).transferERC20(expectedTokenId, alice.address, tokenAddress, balance);
+                const nextNumTotalERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
+
+                assert(nextNumTotalERC20Contracts.eq(tokenERC20Contracts.sub(1)), `Expected ${tokenERC20Contracts - 1} tokenContracts but got ${nextNumTotalERC20Contracts}`);
+                tokenERC20Contracts = nextNumTotalERC20Contracts;
+            }
+
+            // remove nfts
+            let totalNFTsContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
+
+            for (let i = totalNFTsContracts; i > 0; i--) {
+                const contractAddress = await composableTopDownInstance.childContractByIndex(expectedTokenId, i - 1);
+                let totalChildTokens = await composableTopDownInstance.totalChildTokens(expectedTokenId, contractAddress);
+
+                for (let j = totalChildTokens; j > 0; j--) {
+                    const childTokenId = await composableTopDownInstance.childTokenByIndex(expectedTokenId, contractAddress, j - 1);
+                    await composableTopDownInstance.from(alice)['safeTransferChild(uint256,address,address,uint256)'](
+                        expectedTokenId,
+                        alice.address,
+                        contractAddress,
+                        childTokenId
+                    );
+
+                    const totalChildTokensAfterRemoval = await composableTopDownInstance.totalChildTokens(expectedTokenId, contractAddress);
+                    assert(totalChildTokensAfterRemoval.eq(j - 1), 'Invalid totalChildTokens after removal');
+                }
+
+                const totalChildContractsAfterRemoval = await composableTopDownInstance.totalChildContracts(expectedTokenId);
+                assert(totalChildContractsAfterRemoval.eq(i - 1), 'Invalid totalChildContracts after removal');
+            }
+        });
+    });
+
+    async function setupTestTokens(nftCount, erc20Count) {
+        let nfts = [];
+        let erc20s = [];
+        for (let i = 0; i < nftCount; i++) {
+            nfts.push(await deployer.deploy(SampleNFT, {}));
+        }
+
+        for (let i = 0; i < erc20Count; i++) {
+            erc20s.push(await deployer.deploy(SampleERC20, {}, i.toString(), i.toString()));
+        }
+
+        return [nfts, erc20s];
+    }
 
     async function safeTransferFromFirstToken() {
         await sampleNFTInstance
