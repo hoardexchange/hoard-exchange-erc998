@@ -883,8 +883,7 @@ describe('ComposableTopDown', async () => {
 
         it('Should return proper totals after addition and removal', async () => {
             // given:
-            const composableOwnerId = await composableTopDownInstance.ownerOf(expectedTokenId);
-            const [nfts, erc20s] = await setupTestTokens(totalTokens, totalTokens);
+            const [nfts, erc20s] = await setUpTestTokens(totalTokens, totalTokens);
 
             // when:
 
@@ -962,72 +961,236 @@ describe('ComposableTopDown', async () => {
         });
     });
 
-    describe('Between Composables', async () => {
+    describe('Between Composables / Gas Usages', async () => {
         beforeEach(async () => {
             secondComposableTopDownInstance = await deployer.deploy(
                 ComposableTopDown,
                 {}
             );
-            sampleNFTInstance = await deployer.deploy(SampleNFT, {});
 
-            // mint
-            await sampleNFTInstance.mint721(alice.address, NFTHash);
             await composableTopDownInstance.mint(alice.address);
             await secondComposableTopDownInstance.mint(bob.address);
-
-            await safeTransferFromFirstToken();
         });
 
-        it('Should successfully transfer from Composable to Composable', async () => {
-            // given:
-            const expectedFirstComposableChildContracts = 0;
-            const expectedSecondComposableChildContracts = 1;
-            // when:
-            await composableTopDownInstance.from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
-                expectedTokenId,
-                secondComposableTopDownInstance.contractAddress,
-                sampleNFTInstance.contractAddress,
-                firstChildTokenId,
-                bytesFirstToken
-            );
+        describe('NFTs', async () => {
+            beforeEach(async () => {
+                sampleNFTInstance = await deployer.deploy(SampleNFT, {});
+                // mint
+                await sampleNFTInstance.mint721(alice.address, NFTHash);
 
-            // then:
-            // First Composable
-            const composableFirstChildContracts = await composableTopDownInstance.totalChildContracts(firstChildTokenId);
-            assert(composableFirstChildContracts.eq(expectedFirstComposableChildContracts), 'Invalid First Composable Child Contracts');
+                await safeTransferFromFirstToken();
+            });
 
-            const firstComposableChildExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
-            assert(!firstComposableChildExists, 'First Composable Child exists');
+            it('Should successfully transfer NFT from Composable to Composable', async () => {
+                // given:
+                const expectedFirstComposableChildContracts = 0;
+                const expectedSecondComposableChildContracts = 1;
+                // when:
+                await composableTopDownInstance.from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
+                    expectedTokenId,
+                    secondComposableTopDownInstance.contractAddress,
+                    sampleNFTInstance.contractAddress,
+                    firstChildTokenId,
+                    bytesFirstToken
+                );
 
-            await assert.revertWith(composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId), 'ComposableTopDown: ownerOfChild not found');
+                // then:
+                // First Composable
+                const composableFirstChildContracts = await composableTopDownInstance.totalChildContracts(firstChildTokenId);
+                assert(composableFirstChildContracts.eq(expectedFirstComposableChildContracts), 'Invalid First Composable Child Contracts');
 
-            await assert.revertWith(composableTopDownInstance.childContractByIndex(expectedTokenId, 0), 'EnumerableSet: index out of bounds');
+                const firstComposableChildExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
+                assert(!firstComposableChildExists, 'First Composable Child exists');
 
-            await assert.revertWith(composableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0), 'EnumerableSet: index out of bounds');
+                await assert.revertWith(composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId), 'ComposableTopDown: ownerOfChild not found');
 
-            // Second Composable
-            const childExists = await secondComposableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
-            assert(childExists, 'Composable does not own SampleNFT');
+                await assert.revertWith(composableTopDownInstance.childContractByIndex(expectedTokenId, 0), 'EnumerableSet: index out of bounds');
 
-            const ownerOfChild = await secondComposableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId);
-            assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid parent token id');
+                await assert.revertWith(composableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0), 'EnumerableSet: index out of bounds');
 
-            const totalChildContracts = await secondComposableTopDownInstance.totalChildContracts(expectedTokenId);
-            assert(totalChildContracts.eq(expectedSecondComposableChildContracts), 'Invalid total child contracts');
+                const firstComposableTotalChildTokens = await composableTopDownInstance.totalChildTokens(expectedTokenId, sampleNFTInstance.contractAddress);
+                assert(firstComposableTotalChildTokens.eq(0), 'Invalid First Composable Total Child Tokens');
 
-            const childContractAddress = await secondComposableTopDownInstance.childContractByIndex(expectedTokenId, 0);
-            assert(childContractAddress === sampleNFTInstance.contractAddress, 'Invalid child contract address');
+                // Second Composable
+                const childExists = await secondComposableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
+                assert(childExists, 'Composable does not own SampleNFT');
 
-            const tokenId = await secondComposableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0);
-            assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
+                const ownerOfChild = await secondComposableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId);
+                assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid parent token id');
 
-            // SampleNFT
-            const owner = await sampleNFTInstance.ownerOf(expectedTokenId);
-            assert(owner === secondComposableTopDownInstance.contractAddress, 'Invalid NFT Owner');
+                const totalChildContracts = await secondComposableTopDownInstance.totalChildContracts(expectedTokenId);
+                assert(totalChildContracts.eq(expectedSecondComposableChildContracts), 'Invalid total child contracts');
+
+                const childContractAddress = await secondComposableTopDownInstance.childContractByIndex(expectedTokenId, 0);
+                assert(childContractAddress === sampleNFTInstance.contractAddress, 'Invalid child contract address');
+
+                const tokenId = await secondComposableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0);
+                assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
+
+                const secondComposableTotalChildTokens = await secondComposableTopDownInstance.totalChildTokens(expectedTokenId, sampleNFTInstance.contractAddress);
+                assert(secondComposableTotalChildTokens.eq(1), 'Invalid First Composable Total Child Tokens');
+
+                // SampleNFT
+                const owner = await sampleNFTInstance.ownerOf(expectedTokenId);
+                assert(owner === secondComposableTopDownInstance.contractAddress, 'Invalid NFT Owner');
+            });
+
+            describe('Transfer 5 NFTs to another Composable token id', async () => {
+                beforeEach('Mint additional 4 NFTs', async () => {
+                    for (let i = 1; i <= 4; i++) {
+                        await sampleNFTInstance.mint721(alice.address, i.toString());
+                        await sampleNFTInstance
+                            .from(alice)['safeTransferFrom(address,address,uint256,bytes)'](
+                                alice.address,
+                                composableTopDownInstance.contractAddress,
+                                i + 1,
+                                bytesFirstToken);
+                    }
+                });
+
+                it('Should successfully transfer 5 NFTs', async () => {
+                    // when:
+                    for (let i = 1; i <= 5; i++) {
+                        await composableTopDownInstance.from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
+                            expectedTokenId,
+                            secondComposableTopDownInstance.contractAddress,
+                            sampleNFTInstance.contractAddress,
+                            i,
+                            bytesFirstToken
+                        );
+                    }
+                    // then:
+                    const firstComposableTotalChildTokens = await composableTopDownInstance.totalChildTokens(expectedTokenId, sampleNFTInstance.contractAddress);
+                    assert(firstComposableTotalChildTokens.eq(0), 'Invalid First Composable Total Child Tokens');
+
+                    const secondComposableTotalChildTokens = await secondComposableTopDownInstance.totalChildTokens(expectedTokenId, sampleNFTInstance.contractAddress);
+                    assert(secondComposableTotalChildTokens.eq(5), 'Invalid First Composable Total Child Tokens');
+                });
+            });
+        });
+
+        describe('Transfer ERC20 from Composable to Composable', async () => {
+            const mintTokensAmount = 1000;
+            const name = 'SampleERC20';
+            const symbol = 'S';
+            const transferAmount = mintTokensAmount / 2;
+            const secondTransferAmount = transferAmount / 2;
+
+            beforeEach(async () => {
+                sampleERC20Instance = await deployer.deploy(SampleERC20, {}, name, symbol);
+
+                // mint
+                await sampleERC20Instance.mint(alice.address, mintTokensAmount);
+
+                // transfer to first composable
+                await sampleERC20Instance
+                    .from(alice)['transfer(address,uint256,bytes)'](
+                        composableTopDownInstance.contractAddress,
+                        transferAmount,
+                        bytesFirstToken
+                    );
+            });
+
+            it('Should successfully transferERC20 half the amount', async () => {
+                // when:
+                await composableTopDownInstance.from(alice)
+                    .transferERC20(
+                        expectedTokenId,
+                        secondComposableTopDownInstance.contractAddress,
+                        sampleERC20Instance.contractAddress,
+                        secondTransferAmount
+                    );
+                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.contractAddress);
+                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.contractAddress);
+
+                assert(firstComposableBalance.eq(secondComposableBalance), 'Invalid balances');
+            });
+
+            it('Should successfully transferERC20 everything', async () => {
+                // when:
+                await composableTopDownInstance.from(alice)
+                    .transferERC20(
+                        expectedTokenId,
+                        secondComposableTopDownInstance.contractAddress,
+                        sampleERC20Instance.contractAddress,
+                        transferAmount
+                    );
+
+                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.contractAddress);
+                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.contractAddress);
+
+                assert(firstComposableBalance.eq(0), 'Invalid first composable balance');
+                assert(secondComposableBalance.eq(transferAmount), 'Invalid second composable balance');
+            });
+
+            it('Should successfully transferERC223 half the amount', async () => {
+                // when:
+                await composableTopDownInstance.from(alice)
+                    .transferERC223(
+                        expectedTokenId,
+                        secondComposableTopDownInstance.contractAddress,
+                        sampleERC20Instance.contractAddress,
+                        secondTransferAmount,
+                        bytesFirstToken
+                    );
+
+                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.contractAddress);
+                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.contractAddress);
+
+                assert(firstComposableBalance.eq(secondComposableBalance), 'Invalid balances');
+            });
+
+            it('Should successfully transferERC223 everything', async () => {
+                // when:
+                await composableTopDownInstance.from(alice)
+                    .transferERC223(
+                        expectedTokenId,
+                        secondComposableTopDownInstance.contractAddress,
+                        sampleERC20Instance.contractAddress,
+                        transferAmount,
+                        bytesFirstToken
+                    );
+                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.contractAddress);
+                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.contractAddress);
+
+                assert(firstComposableBalance.eq(0), 'Invalid first composable balance');
+                assert(secondComposableBalance.eq(transferAmount), 'Invalid second composable balance');
+            });
+
+            it('Should successfully transferERC223 everything on 5 portions', async () => {
+                // given:
+                const portion = transferAmount / 5;
+
+                // when:
+                for (let i = 0; i < 5; i++) {
+                    await composableTopDownInstance.from(alice)
+                        .transferERC223(
+                            expectedTokenId,
+                            secondComposableTopDownInstance.contractAddress,
+                            sampleERC20Instance.contractAddress,
+                            portion,
+                            bytesFirstToken
+                        );
+                }
+
+                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.contractAddress);
+                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.contractAddress);
+
+                assert(firstComposableBalance.eq(0), 'Invalid first composable balance');
+                assert(secondComposableBalance.eq(transferAmount), 'Invalid second composable balance');
+
+                const firstComposableTokenIdBalance = await composableTopDownInstance
+                    .balanceOfERC20(expectedTokenId, sampleERC20Instance.contractAddress);
+                assert(firstComposableTokenIdBalance.eq(0), 'Invalid first composable tokenId balance');
+
+                const secondComposableTokenIdBalance = await secondComposableTopDownInstance
+                    .balanceOfERC20(expectedTokenId, sampleERC20Instance.contractAddress);
+                assert(secondComposableTokenIdBalance.eq(transferAmount), 'Invalid second composable tokenId balance');
+            });
         });
     });
 
-    async function setupTestTokens(nftCount, erc20Count) {
+    async function setUpTestTokens(nftCount, erc20Count) {
         let nfts = [];
         let erc20s = [];
         for (let i = 0; i < nftCount; i++) {
