@@ -676,7 +676,8 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice)['transferERC20(uint256,address,address,uint256)'](
+                .from(alice)
+                .transferERC20(
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -703,7 +704,8 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice)['transferERC223(uint256,address,address,uint256,bytes)'](
+                .from(alice)
+                .transferERC223(
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -731,7 +733,8 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice)['transferERC223(uint256,address,address,uint256,bytes)'](
+                .from(alice)
+                .transferERC223(
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -762,7 +765,8 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice)['transferERC223(uint256,address,address,uint256,bytes)'](
+                .from(alice)
+                .transferERC223(
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -961,7 +965,7 @@ describe('ComposableTopDown', async () => {
         });
     });
 
-    describe('Between Composables / Gas Usages', async () => {
+    describe('Between ComposableTopDowns / Gas Usages', async () => {
         beforeEach(async () => {
             secondComposableTopDownInstance = await deployer.deploy(
                 ComposableTopDown,
@@ -981,7 +985,7 @@ describe('ComposableTopDown', async () => {
                 await safeTransferFromFirstToken();
             });
 
-            it('Should successfully transfer NFT from Composable to Composable', async () => {
+            it('Should successfully transfer NFT from ComposableTopDown to ComposableTopDown', async () => {
                 // given:
                 const expectedFirstComposableChildContracts = 0;
                 const expectedSecondComposableChildContracts = 1;
@@ -1069,7 +1073,7 @@ describe('ComposableTopDown', async () => {
             });
         });
 
-        describe('Transfer ERC20 from Composable to Composable', async () => {
+        describe('Transfer ERC20 from ComposableTopDown to ComposableTopDown', async () => {
             const mintTokensAmount = 1000;
             const name = 'SampleERC20';
             const symbol = 'S';
