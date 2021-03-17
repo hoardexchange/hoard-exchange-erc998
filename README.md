@@ -33,7 +33,7 @@ etherlime compile --solcVersion=0.7.0 --runs 200
 
 ### Run Tests
 ```
-etherlime test --timeout 10000
+etherlime test --skip-compilation --timeout 10000 --gas-report
 ```
 
 ### Run Tests with Coverage

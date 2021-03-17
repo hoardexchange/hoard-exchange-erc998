@@ -86,11 +86,14 @@ describe('ComposableTopDown', async () => {
 
             const tokenId = await composableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0);
             assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
+
+            const owner = await sampleNFTInstance.ownerOf(expectedTokenId);
+            assert(owner === composableTopDownInstance.contractAddress, 'Invalid owner address');
         });
 
         it('Should safeTransferFromOld SampleNFT to Composable', async () => {
             // when:
-            await sampleNFTInstance.from(alice.address).safeTransferFromOld(
+            await sampleNFTInstance.from(alice).safeTransferFromOld(
                 alice.address,
                 composableTopDownInstance.contractAddress,
                 expectedTokenId,
@@ -118,13 +121,13 @@ describe('ComposableTopDown', async () => {
             await erc721Instance.mint721(alice.address);
             const expectedRevertMessage = 'ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to';
             // await assert.revertWith(
-            //     erc721Instance.from(alice.address).safeTransferFrom(
+            //     erc721Instance.from(alice).safeTransferFrom(
             //         alice.address,
             //         composableTopDownInstance.contractAddress,
             //         expectedTokenId),
             //     expectedRevertMessage);
 
-            await assert.revert(erc721Instance.from(alice.address).safeTransferFrom(
+            await assert.revert(erc721Instance.from(alice).safeTransferFrom(
                 alice.address,
                 composableTopDownInstance.contractAddress,
                 expectedTokenId),
@@ -139,12 +142,12 @@ describe('ComposableTopDown', async () => {
             it('Should revert when trying to approve with not owner', async () => {
                 const expectedRevertMessage = 'ComposableTopDown: approve msg.sender not owner';
 
-                await assert.revertWith(composableTopDownInstance.from(bob.address).approve(bob.address, expectedTokenId), expectedRevertMessage);
+                await assert.revertWith(composableTopDownInstance.from(bob).approve(bob.address, expectedTokenId), expectedRevertMessage);
             });
 
             it('Should successfully approve bob for first token', async () => {
                 // when:
-                await composableTopDownInstance.from(alice.address).approve(bob.address, expectedTokenId);
+                await composableTopDownInstance.from(alice).approve(bob.address, expectedTokenId);
 
                 // then:
                 const approvedAddress = await composableTopDownInstance.getApproved(expectedTokenId);
@@ -157,7 +160,7 @@ describe('ComposableTopDown', async () => {
 
                 // then:
                 await assert.emit(
-                    composableTopDownInstance.from(alice.address).approve(bob.address, expectedTokenId),
+                    composableTopDownInstance.from(alice).approve(bob.address, expectedTokenId),
                     expectedEvent
                 );
             });
@@ -169,7 +172,7 @@ describe('ComposableTopDown', async () => {
 
                 // then:
                 await assert.emitWithArgs(
-                    composableTopDownInstance.from(alice.address).approve(approvedAddress, expectedTokenId),
+                    composableTopDownInstance.from(alice).approve(approvedAddress, expectedTokenId),
                     expectedEvent,
                     [
                         alice.address,
@@ -236,7 +239,7 @@ describe('ComposableTopDown', async () => {
                 const expectedRevertMessage = 'ComposableTopDown: getChild msg.sender not approved';
 
                 await assert.revertWith(
-                    composableTopDownInstance.from(bob.address)
+                    composableTopDownInstance.from(bob)
                         .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
                     expectedRevertMessage);
             });
@@ -244,7 +247,7 @@ describe('ComposableTopDown', async () => {
             it('Should revert when trying to get unapproved from SampleNFT', async () => {
                 const expectedRevertMessage = 'ERC721: transfer caller is not owner nor approved';
                 await assert.revertWith(
-                    composableTopDownInstance.from(alice.address)
+                    composableTopDownInstance.from(alice)
                         .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
                     expectedRevertMessage);
             });
@@ -252,18 +255,18 @@ describe('ComposableTopDown', async () => {
             it('Should revert when trying to get unapproved from SampleNFT', async () => {
                 const expectedRevertMessage = 'ERC721: transfer caller is not owner nor approved';
                 await assert.revertWith(
-                    composableTopDownInstance.from(alice.address)
+                    composableTopDownInstance.from(alice)
                         .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
                     expectedRevertMessage);
             });
 
             it('Should successfully getChild', async () => {
                 // given:
-                await sampleNFTInstance.from(alice.address)
+                await sampleNFTInstance.from(alice)
                     .approve(composableTopDownInstance.contractAddress, expectedTokenId);
 
                 // when:
-                await composableTopDownInstance.from(alice.address)
+                await composableTopDownInstance.from(alice)
                     .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId);
 
                 //then:
@@ -285,14 +288,14 @@ describe('ComposableTopDown', async () => {
 
             it('Should successfully getChild using bob as intermediary for alice using setApprovalForAll', async () => {
                 // given:
-                await sampleNFTInstance.from(alice.address)
+                await sampleNFTInstance.from(alice)
                     .approve(composableTopDownInstance.contractAddress, expectedTokenId);
 
-                await sampleNFTInstance.from(alice.address)
+                await sampleNFTInstance.from(alice)
                     .setApprovalForAll(bob.address, true);
 
                 // when:
-                await composableTopDownInstance.from(bob.address)
+                await composableTopDownInstance.from(bob)
                     .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId);
 
                 //then:
@@ -314,26 +317,26 @@ describe('ComposableTopDown', async () => {
 
             it('Should emit ReceiveChild event', async () => {
                 // given:
-                await sampleNFTInstance.from(alice.address)
+                await sampleNFTInstance.from(alice)
                     .approve(composableTopDownInstance.contractAddress, expectedTokenId);
                 const expectedEvent = 'ReceivedChild';
 
                 // then:
                 await assert.emit(
-                    composableTopDownInstance.from(alice.address)
+                    composableTopDownInstance.from(alice)
                         .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
                     expectedEvent);
             });
 
             it('Should emit ReceiveChild event arguments', async () => {
                 // given:
-                await sampleNFTInstance.from(alice.address)
+                await sampleNFTInstance.from(alice)
                     .approve(composableTopDownInstance.contractAddress, expectedTokenId);
                 const expectedEvent = 'ReceivedChild';
 
                 // then:
                 await assert.emitWithArgs(
-                    composableTopDownInstance.from(alice.address)
+                    composableTopDownInstance.from(alice)
                         .getChild(alice.address, expectedTokenId, sampleNFTInstance.contractAddress, expectedTokenId),
                     expectedEvent,
                     [
@@ -373,7 +376,7 @@ describe('ComposableTopDown', async () => {
 
             it('Should successfully transferFrom to bob', async () => {
                 // when:
-                await composableTopDownInstance.from(alice.address).transferFrom(alice.address, bob.address, expectedTokenId);
+                await composableTopDownInstance.from(alice).transferFrom(alice.address, bob.address, expectedTokenId);
 
                 // then:
                 const ownerOf = await composableTopDownInstance.ownerOf(expectedTokenId);
@@ -388,7 +391,7 @@ describe('ComposableTopDown', async () => {
                 const beforeTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
 
                 // when:
-                await composableTopDownInstance.from(alice.address).safeTransferFrom(alice.address, contractIERC721ReceiverOldInstance.contractAddress, expectedTokenId);
+                await composableTopDownInstance.from(alice).safeTransferFrom(alice.address, contractIERC721ReceiverOldInstance.contractAddress, expectedTokenId);
                 // then:
                 const afterTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
                 assert(afterTransferContractBalance.eq(beforeTransferContractBalance.add(1)), 'Invalid contract balanceOf');
@@ -403,13 +406,13 @@ describe('ComposableTopDown', async () => {
             it('Should successfully safeTransferFrom(3) with bob used as intermediary', async () => {
                 // given:
                 const contractIERC721ReceiverOldInstance = await deployer.deploy(ContractIERC721ReceiverOld, {});
-                await composableTopDownInstance.from(alice.address).approve(bob.address, expectedTokenId);
+                await composableTopDownInstance.from(alice).approve(bob.address, expectedTokenId);
 
                 const beforeTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
                 const beforeTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
 
                 // when:
-                await composableTopDownInstance.from(bob.address).safeTransferFrom(alice.address, contractIERC721ReceiverOldInstance.contractAddress, expectedTokenId);
+                await composableTopDownInstance.from(bob).safeTransferFrom(alice.address, contractIERC721ReceiverOldInstance.contractAddress, expectedTokenId);
                 // then:
                 const afterTransferContractBalance = await composableTopDownInstance.balanceOf(contractIERC721ReceiverOldInstance.contractAddress);
                 assert(afterTransferContractBalance.eq(beforeTransferContractBalance.add(1)), 'Invalid contract balanceOf');
@@ -421,8 +424,8 @@ describe('ComposableTopDown', async () => {
                 assert(ownerOf === contractIERC721ReceiverOldInstance.contractAddress, 'Invalid token owner');
             });
 
-            it('Should revert when trying to safeTransferFrom(3) to a contract with no IERC721Receiavable', async () => {
-                await assert.revert(composableTopDownInstance.from(alice.address).safeTransferFrom(alice.address, sampleNFTInstance.contractAddress, expectedTokenId));
+            it('Should revert when trying to safeTransferFrom(3) to a contract with no IERC721Receivable', async () => {
+                await assert.revert(composableTopDownInstance.from(alice).safeTransferFrom(alice.address, sampleNFTInstance.contractAddress, expectedTokenId));
             });
 
             it('Should revert when trying to safeTransferFrom(3) to a contract with != ERC721_RECEIVED_OLD', async () => {
@@ -431,8 +434,8 @@ describe('ComposableTopDown', async () => {
                 const expectedRevertMessage = 'ComposableTopDown: safeTransferFrom(3) onERC721Received invalid return value';
 
                 // then:
-                await assert.revert(composableTopDownInstance.from(alice.address).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
-                // await assert.revertWith(composableTopDownInstance.from(alice.address).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
+                await assert.revert(composableTopDownInstance.from(alice).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
+                // await assert.revertWith(composableTopDownInstance.from(alice).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
             });
 
             it('Should successfully safeTransferFrom(4) to a contract', async () => {
@@ -442,7 +445,7 @@ describe('ComposableTopDown', async () => {
                 const beforeTransferAliceBalance = await composableTopDownInstance.balanceOf(alice.address);
 
                 // when:
-                await composableTopDownInstance.from(alice.address)['safeTransferFrom(address,address,uint256,bytes)']
+                await composableTopDownInstance.from(alice)['safeTransferFrom(address,address,uint256,bytes)']
                     (alice.address,
                         contractIERC721ReceiverOldInstance.contractAddress,
                         expectedTokenId,
@@ -458,8 +461,8 @@ describe('ComposableTopDown', async () => {
                 assert(ownerOf === contractIERC721ReceiverOldInstance.contractAddress, 'Invalid token owner');
             });
 
-            it('Should revert when trying to safeTransferFrom(4) to a contract with no IERC721Receiavable', async () => {
-                await assert.revert(composableTopDownInstance.from(alice.address)['safeTransferFrom(address,address,uint256,bytes)']
+            it('Should revert when trying to safeTransferFrom(4) to a contract with no IERC721Receivable', async () => {
+                await assert.revert(composableTopDownInstance.from(alice)['safeTransferFrom(address,address,uint256,bytes)']
                     (alice.address,
                         sampleNFTInstance.contractAddress,
                         expectedTokenId,
@@ -473,22 +476,22 @@ describe('ComposableTopDown', async () => {
 
                 // then:
                 await assert.revert(composableTopDownInstance
-                    .from(alice.address)
+                    .from(alice)
                 ['safeTransferFrom(address,address,uint256,bytes)']
                     (alice.address,
                         contractIERC721ReceiverNewInstance.contractAddress,
                         expectedTokenId,
                         bytesFirstToken), expectedRevertMessage);
-                // await assert.revertWith(composableTopDownInstance.from(alice.address).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
+                // await assert.revertWith(composableTopDownInstance.from(alice).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
             });
 
             it('Should successfully return back token', async () => {
                 // given:
-                await composableTopDownInstance.from(alice.address).transferFrom(alice.address, bob.address, expectedTokenId);
+                await composableTopDownInstance.from(alice).transferFrom(alice.address, bob.address, expectedTokenId);
 
                 // when:
                 await composableTopDownInstance
-                    .from(bob.address)['transferChild(uint256,address,address,uint256)'](
+                    .from(bob)['transferChild(uint256,address,address,uint256)'](
                         expectedTokenId,
                         alice.address,
                         sampleNFTInstance.contractAddress,
@@ -506,7 +509,7 @@ describe('ComposableTopDown', async () => {
                 assert(!childExists, 'child contract exists');
             });
 
-            describe('Between Composables - safeTransferChild', async () => {
+            describe('safeTransferChild', async () => {
                 const secondToken = 2;
                 const secondChildTokenId = 2;
                 const secondNFTHash = '0x5678';
@@ -555,7 +558,7 @@ describe('ComposableTopDown', async () => {
 
                     // when:
                     await composableTopDownInstance
-                        .from(alice.address)['safeTransferChild(uint256,address,address,uint256,bytes)'](
+                        .from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
                             secondToken,
                             composableTopDownInstance.contractAddress,
                             sampleNFTInstance.contractAddress,
@@ -589,7 +592,7 @@ describe('ComposableTopDown', async () => {
 
                     // when:
                     await composableTopDownInstance
-                        .from(alice.address)['safeTransferChild(uint256,address,address,uint256)'](
+                        .from(alice)['safeTransferChild(uint256,address,address,uint256)'](
                             secondToken,
                             composableTopDownInstance.contractAddress,
                             sampleNFTInstance.contractAddress,
@@ -644,7 +647,7 @@ describe('ComposableTopDown', async () => {
         it('Should transfer half the value from ERC20 to Composable', async () => {
             // when:
             await sampleERC20Instance
-                .from(alice.address)['transfer(address,uint256,bytes)'](
+                .from(alice)['transfer(address,uint256,bytes)'](
                     composableTopDownInstance.contractAddress,
                     transferAmount,
                     bytesFirstToken
@@ -665,7 +668,7 @@ describe('ComposableTopDown', async () => {
         it('Should transfer from Composable to bob via transferERC20', async () => {
             // given:
             await sampleERC20Instance
-                .from(alice.address)['transfer(address,uint256,bytes)'](
+                .from(alice)['transfer(address,uint256,bytes)'](
                     composableTopDownInstance.contractAddress,
                     transferAmount,
                     bytesFirstToken
@@ -673,7 +676,7 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice.address)['transferERC20(uint256,address,address,uint256)'](
+                .from(alice)['transferERC20(uint256,address,address,uint256)'](
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -692,7 +695,7 @@ describe('ComposableTopDown', async () => {
         it('Should transfer from Composable to bob via transferERC223', async () => {
             // given:
             await sampleERC20Instance
-                .from(alice.address)['transfer(address,uint256,bytes)'](
+                .from(alice)['transfer(address,uint256,bytes)'](
                     composableTopDownInstance.contractAddress,
                     transferAmount,
                     bytesFirstToken
@@ -700,7 +703,7 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice.address)['transferERC223(uint256,address,address,uint256,bytes)'](
+                .from(alice)['transferERC223(uint256,address,address,uint256,bytes)'](
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -720,7 +723,7 @@ describe('ComposableTopDown', async () => {
         it('Should transfer everything from Composable to bob via transferERC223', async () => {
             // given:
             await sampleERC20Instance
-                .from(alice.address)['transfer(address,uint256,bytes)'](
+                .from(alice)['transfer(address,uint256,bytes)'](
                     composableTopDownInstance.contractAddress,
                     transferAmount,
                     bytesFirstToken
@@ -728,7 +731,7 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice.address)['transferERC223(uint256,address,address,uint256,bytes)'](
+                .from(alice)['transferERC223(uint256,address,address,uint256,bytes)'](
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -751,7 +754,7 @@ describe('ComposableTopDown', async () => {
         it('Should transfer 0 from Composable to bob via transferERC223', async () => {
             // given:
             await sampleERC20Instance
-                .from(alice.address)['transfer(address,uint256,bytes)'](
+                .from(alice)['transfer(address,uint256,bytes)'](
                     composableTopDownInstance.contractAddress,
                     transferAmount,
                     bytesFirstToken
@@ -759,7 +762,7 @@ describe('ComposableTopDown', async () => {
 
             // when:
             await composableTopDownInstance
-                .from(alice.address)['transferERC223(uint256,address,address,uint256,bytes)'](
+                .from(alice)['transferERC223(uint256,address,address,uint256,bytes)'](
                     expectedTokenId,
                     bob.address,
                     sampleERC20Instance.contractAddress,
@@ -778,10 +781,10 @@ describe('ComposableTopDown', async () => {
 
         it('Should get tokens using getERC20', async () => {
             // given:
-            await sampleERC20Instance.from(alice.address).approve(composableTopDownInstance.contractAddress, transferAmount);
+            await sampleERC20Instance.from(alice).approve(composableTopDownInstance.contractAddress, transferAmount);
 
             // when:
-            await composableTopDownInstance.from(alice.address)
+            await composableTopDownInstance.from(alice)
                 .getERC20(
                     alice.address,
                     expectedTokenId,
@@ -799,10 +802,10 @@ describe('ComposableTopDown', async () => {
 
         it('Should get 0 tokens using getERC20', async () => {
             // given:
-            await sampleERC20Instance.from(alice.address).approve(composableTopDownInstance.contractAddress, transferAmount);
+            await sampleERC20Instance.from(alice).approve(composableTopDownInstance.contractAddress, transferAmount);
 
             // when:
-            await composableTopDownInstance.from(alice.address)
+            await composableTopDownInstance.from(alice)
                 .getERC20(
                     alice.address,
                     expectedTokenId,
@@ -822,7 +825,7 @@ describe('ComposableTopDown', async () => {
             const expectedRevertMessage = 'ComposableTopDown: getERC20 allowance failed';
             await assert.revertWith(
                 composableTopDownInstance
-                    .from(bob.address)
+                    .from(bob)
                     .getERC20(
                         alice.address,
                         expectedTokenId,
@@ -836,7 +839,7 @@ describe('ComposableTopDown', async () => {
             // when:
             await assert.revert(
                 composableTopDownInstance
-                    .from(bob.address)
+                    .from(bob)
                     .getERC20(
                         alice.address,
                         expectedTokenId,
@@ -847,11 +850,11 @@ describe('ComposableTopDown', async () => {
 
         it('Should get tokens using getERC20, using bob as approved sender', async () => {
             // given:
-            await sampleERC20Instance.from(alice.address).approve(bob.address, transferAmount);
-            await sampleERC20Instance.from(alice.address).approve(composableTopDownInstance.contractAddress, transferAmount);
+            await sampleERC20Instance.from(alice).approve(bob.address, transferAmount);
+            await sampleERC20Instance.from(alice).approve(composableTopDownInstance.contractAddress, transferAmount);
 
             // when:
-            await composableTopDownInstance.from(bob.address)
+            await composableTopDownInstance.from(bob)
                 .getERC20(
                     alice.address,
                     expectedTokenId,
@@ -888,7 +891,7 @@ describe('ComposableTopDown', async () => {
             // transfer erc20s
             for (let i = 0; i < erc20s.length; i++) {
                 await erc20s[i].mint(alice.address, mintTokensAmount);
-                await erc20s[i].from(alice.address)['transfer(address,uint256,bytes)'](
+                await erc20s[i].from(alice)['transfer(address,uint256,bytes)'](
                     composableTopDownInstance.contractAddress,
                     transferAmount,
                     bytesFirstToken
@@ -956,6 +959,71 @@ describe('ComposableTopDown', async () => {
                 const totalChildContractsAfterRemoval = await composableTopDownInstance.totalChildContracts(expectedTokenId);
                 assert(totalChildContractsAfterRemoval.eq(i - 1), 'Invalid totalChildContracts after removal');
             }
+        });
+    });
+
+    describe('Between Composables', async () => {
+        beforeEach(async () => {
+            secondComposableTopDownInstance = await deployer.deploy(
+                ComposableTopDown,
+                {}
+            );
+            sampleNFTInstance = await deployer.deploy(SampleNFT, {});
+
+            // mint
+            await sampleNFTInstance.mint721(alice.address, NFTHash);
+            await composableTopDownInstance.mint(alice.address);
+            await secondComposableTopDownInstance.mint(bob.address);
+
+            await safeTransferFromFirstToken();
+        });
+
+        it('Should successfully transfer from Composable to Composable', async () => {
+            // given:
+            const expectedFirstComposableChildContracts = 0;
+            const expectedSecondComposableChildContracts = 1;
+            // when:
+            await composableTopDownInstance.from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
+                expectedTokenId,
+                secondComposableTopDownInstance.contractAddress,
+                sampleNFTInstance.contractAddress,
+                firstChildTokenId,
+                bytesFirstToken
+            );
+
+            // then:
+            // First Composable
+            const composableFirstChildContracts = await composableTopDownInstance.totalChildContracts(firstChildTokenId);
+            assert(composableFirstChildContracts.eq(expectedFirstComposableChildContracts), 'Invalid First Composable Child Contracts');
+
+            const firstComposableChildExists = await composableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
+            assert(!firstComposableChildExists, 'First Composable Child exists');
+
+            await assert.revertWith(composableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId), 'ComposableTopDown: ownerOfChild not found');
+
+            await assert.revertWith(composableTopDownInstance.childContractByIndex(expectedTokenId, 0), 'EnumerableSet: index out of bounds');
+
+            await assert.revertWith(composableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0), 'EnumerableSet: index out of bounds');
+
+            // Second Composable
+            const childExists = await secondComposableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
+            assert(childExists, 'Composable does not own SampleNFT');
+
+            const ownerOfChild = await secondComposableTopDownInstance.ownerOfChild(sampleNFTInstance.contractAddress, firstChildTokenId);
+            assert(ownerOfChild.parentTokenId.eq(expectedTokenId), 'Invalid parent token id');
+
+            const totalChildContracts = await secondComposableTopDownInstance.totalChildContracts(expectedTokenId);
+            assert(totalChildContracts.eq(expectedSecondComposableChildContracts), 'Invalid total child contracts');
+
+            const childContractAddress = await secondComposableTopDownInstance.childContractByIndex(expectedTokenId, 0);
+            assert(childContractAddress === sampleNFTInstance.contractAddress, 'Invalid child contract address');
+
+            const tokenId = await secondComposableTopDownInstance.childTokenByIndex(expectedTokenId, sampleNFTInstance.contractAddress, 0);
+            assert(tokenId.eq(expectedTokenId), 'Invalid token id found when querying child token by index');
+
+            // SampleNFT
+            const owner = await sampleNFTInstance.ownerOf(expectedTokenId);
+            assert(owner === secondComposableTopDownInstance.contractAddress, 'Invalid NFT Owner');
         });
     });
 
