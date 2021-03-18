@@ -1060,7 +1060,7 @@ describe('ComposableTopDown', async () => {
                 assert(owner === expectedRootOwnerOfChild, 'Invalid owner');
             });
 
-            it('Should successfully transfer ERC998 to SecondComposable', async () => {
+            it.only('Should successfully transfer ERC998 to SecondComposable', async () => {
                 // given:
                 const expectedRootOwnerOf = ethers.utils.hexZeroPad(secondComposableTopDownInstance.contractAddress, 32).toLowerCase();
                 const expectedSecondComposableRootOwnerOf = ethers.utils.hexZeroPad(bob.address, 32).toLowerCase();
@@ -1330,7 +1330,7 @@ describe('ComposableTopDown', async () => {
             await erc998Weapons.mint(owner.signer.address); // id 3
         });
 
-        it('Should successfully populate accounts', async () => {
+        it('Should successfully populate accounts and then showcase how the deepest level NFT is transferred', async () => {
             erc721Enchantments = await deployer.deploy(SampleNFT, {});
 
             // Mint enchantments
@@ -1396,13 +1396,39 @@ describe('ComposableTopDown', async () => {
 
             const bobAccountChildContracts = await erc998Accounts.totalChildContracts(2);
             assert(bobAccountChildContracts.eq(1), 'Invalid bob child contracts');
-            
-            await erc998Weapons.from(alice)['safeTransferChild(uint256,address,address,uint256)'](
+
+            // How to transfer an enchantment from FirstWeapon to SecondWeapon?
+            // Transfer Character
+            await erc998Accounts.from(alice)['safeTransferChild(uint256,address,address,uint256)'](
+                1,
+                alice.address,
+                erc998Characters.contractAddress,
+                1
+            );
+
+            // Transfer Weapon
+            await erc998Characters.from(alice)['safeTransferChild(uint256,address,address,uint256)'](
+                1,
+                alice.address,
+                erc998Weapons.contractAddress,
+                1
+            );
+
+            // enchantments before transfer
+            const secondWeaponEnchantmentsBeforeTransfer = await erc998Weapons.totalChildTokens(2, erc721Enchantments.contractAddress);
+
+            // Transfer Enchantment
+            await erc998Weapons.from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
                 1,
                 erc998Weapons.contractAddress,
                 erc721Enchantments.contractAddress,
-                bytesSecond
+                1,
+                bytesSecond // transfer to second weapon
             );
+
+            const secondWeaponEnchantmentsAfterTransfer = await erc998Weapons.totalChildTokens(2, erc721Enchantments.contractAddress);
+            assert(secondWeaponEnchantmentsAfterTransfer.eq(secondWeaponEnchantmentsBeforeTransfer.add(1)),
+                'Invalid total child contracts');
         });
     });
 
