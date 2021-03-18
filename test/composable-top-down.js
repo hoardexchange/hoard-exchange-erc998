@@ -1060,7 +1060,7 @@ describe('ComposableTopDown', async () => {
                 assert(owner === expectedRootOwnerOfChild, 'Invalid owner');
             });
 
-            it.only('Should successfully transfer ERC998 to SecondComposable', async () => {
+            it('Should successfully transfer ERC998 to SecondComposable', async () => {
                 // given:
                 const expectedRootOwnerOf = ethers.utils.hexZeroPad(secondComposableTopDownInstance.contractAddress, 32).toLowerCase();
                 const expectedSecondComposableRootOwnerOf = ethers.utils.hexZeroPad(bob.address, 32).toLowerCase();

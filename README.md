@@ -49,12 +49,12 @@ etherlime coverage --solcVersion=0.7.0 --timeout 20000
 ## Gas Usages
 
 ### Composable to Composable
-* `transferFrom` ~ 44 914 gas
-* `safeTransferFrom(4)` ~ 50 526 gas
 * `safeTransferChild(4)` ~ 86 505 gas
 * `safeTransferChild(5)` ~ 92 204 gas
+* `safeTransferFrom(4)` ~ 50 526 gas
 * `transferERC20` ~ 64 790 gas
 * `transferERC223` ~ 67 038 gas
+* `transferFrom` ~ 44 914 gas
 
 ### ComposableTopDown to ComposableTopDown
 * `safeTransferChild(4)` ~ 60 100 gas
@@ -63,4 +63,4 @@ etherlime coverage --solcVersion=0.7.0 --timeout 20000
 * `transferERC20` ~ 64 790 gas
 * `transferERC223` ~ 112 149 gas
 
-`NB!` Gas estimations include first-time storage allocation and storage deallocation.
+`NB!` Gas usages above are average values of method executions, which include first-time storage allocation and storage deallocation.
