@@ -48,6 +48,7 @@ contract ComposableTopDown is
     //constructor(string _name, string _symbol) public ERC721Token(_name, _symbol) {}
 
     // wrapper on minting new 721
+    // @notice Be cautious when minting to contracts
     function mint(address _to) public returns (uint256) {
         tokenCount++;
         uint256 tokenCount_ = tokenCount;
@@ -236,7 +237,7 @@ contract ComposableTopDown is
                     ""
                 );
             require(
-                retval == ERC721_RECEIVED_OLD,
+                retval == ERC721_RECEIVED_OLD || retval == ERC721_RECEIVED_NEW,
                 "ComposableTopDown: safeTransferFrom(3) onERC721Received invalid return value"
             );
         }
@@ -258,7 +259,7 @@ contract ComposableTopDown is
                     _data
                 );
             require(
-                retval == ERC721_RECEIVED_OLD,
+                retval == ERC721_RECEIVED_OLD || retval == ERC721_RECEIVED_NEW,
                 "ComposableTopDown: safeTransferFrom(4) onERC721Received invalid return value"
             );
         }
