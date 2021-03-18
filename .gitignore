@@ -102,3 +102,11 @@ dist
 
 # TernJS port file
 .tern-port
+
+# IDEA folder
+.idea
+
+# etherlime build folder
+build
+
+.DS_STORE
