@@ -26,6 +26,11 @@ cd hoard-exchange-erc-998
 npm install
 ```
 
+### Run ganache
+```
+etherlime ganache
+```
+
 ### Compilation
 ```
 etherlime compile --solcVersion=0.7.0 --runs 200
@@ -33,10 +38,10 @@ etherlime compile --solcVersion=0.7.0 --runs 200
 
 ### Run Tests
 ```
-etherlime test --skip-compilation --timeout 10000 --gas-report
+etherlime test --skip-compilation --timeout 20000 --gas-report
 ```
 
 ### Run Tests with Coverage
 ``` 
-etherlime coverage --solcVersion=0.7.0 --timeout 10000
+etherlime coverage --solcVersion=0.7.0 --timeout 20000
 ```

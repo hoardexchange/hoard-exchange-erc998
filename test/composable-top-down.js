@@ -120,12 +120,6 @@ describe('ComposableTopDown', async () => {
             const erc721Instance = await deployer.deploy(ContractIERC721ReceiverOld, {});
             await erc721Instance.mint721(alice.address);
             const expectedRevertMessage = 'ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to';
-            // await assert.revertWith(
-            //     erc721Instance.from(alice).safeTransferFrom(
-            //         alice.address,
-            //         composableTopDownInstance.contractAddress,
-            //         expectedTokenId),
-            //     expectedRevertMessage);
 
             await assert.revert(erc721Instance.from(alice).safeTransferFrom(
                 alice.address,
@@ -435,7 +429,6 @@ describe('ComposableTopDown', async () => {
 
                 // then:
                 await assert.revert(composableTopDownInstance.from(alice).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
-                // await assert.revertWith(composableTopDownInstance.from(alice).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
             });
 
             it('Should successfully safeTransferFrom(4) to a contract', async () => {
@@ -482,7 +475,6 @@ describe('ComposableTopDown', async () => {
                         contractIERC721ReceiverNewInstance.contractAddress,
                         expectedTokenId,
                         bytesFirstToken), expectedRevertMessage);
-                // await assert.revertWith(composableTopDownInstance.from(alice).safeTransferFrom(alice.address, contractIERC721ReceiverNewInstance.contractAddress, expectedTokenId), expectedRevertMessage);
             });
 
             it('Should successfully return back token', async () => {
@@ -965,6 +957,76 @@ describe('ComposableTopDown', async () => {
         });
     });
 
+    describe('Between Composables / Gas Usages', async () => {
+        const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 32);
+
+        describe('5 NFTs from 1 type', async () => {
+            beforeEach(async () => {
+                sampleNFTInstance = await deployer.deploy(SampleNFT, {});
+
+                await composableTopDownInstance.mint(alice.address);
+                await composableTopDownInstance.mint(bob.address);
+
+                for (let i = 1; i <= 5; i++) {
+                    await sampleNFTInstance.mint721(alice.address, i.toString());
+                    await sampleNFTInstance
+                        .from(alice)['safeTransferFrom(address,address,uint256,bytes)'](
+                            alice.address,
+                            composableTopDownInstance.contractAddress,
+                            i,
+                            bytesFirstToken);
+                }
+            });
+
+
+            it('Should transfer to bob 5 1 Type NFTs', async () => {
+                // when:
+                for (let i = 1; i <= 5; i++) {
+                    await composableTopDownInstance
+                        .from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
+                            expectedTokenId,
+                            composableTopDownInstance.contractAddress,
+                            sampleNFTInstance.contractAddress,
+                            i,
+                            bytesSecondToken
+                        );
+                }
+            });
+        });
+
+        describe('5 different NFTs', async () => {
+            beforeEach(async () => {
+                await composableTopDownInstance.mint(alice.address);
+                await composableTopDownInstance.mint(bob.address);
+
+                const [nfts, _] = await setUpTestTokens(5, 0);
+                nftInstances = nfts;
+
+                for (let i = 0; i < nftInstances.length; i++) {
+                    await nftInstances[i].mint721(alice.address, i.toString());
+                    await nftInstances[i].from(alice)['safeTransferFrom(address,address,uint256,bytes)'](
+                        alice.address,
+                        composableTopDownInstance.contractAddress,
+                        1,
+                        bytesFirstToken);
+                }
+            });
+
+            it('Should successfully transfer 5 NFTs to bob', async () => {
+                for (let i = 0; i < nftInstances.length; i++) {
+                    await composableTopDownInstance
+                        .from(alice)['safeTransferChild(uint256,address,address,uint256,bytes)'](
+                            expectedTokenId,
+                            composableTopDownInstance.contractAddress,
+                            nftInstances[i].contractAddress,
+                            1,
+                            bytesSecondToken
+                        );
+                }
+            });
+        });
+    });
+
     describe('Between ComposableTopDowns / Gas Usages', async () => {
         beforeEach(async () => {
             secondComposableTopDownInstance = await deployer.deploy(
@@ -983,6 +1045,43 @@ describe('ComposableTopDown', async () => {
                 await sampleNFTInstance.mint721(alice.address, NFTHash);
 
                 await safeTransferFromFirstToken();
+            });
+
+            it('Should successfully transfer tokenId to ComposableTopDown', async () => {
+                // given:
+                const expectedRootOwnerOfChild = ethers.utils.hexZeroPad(secondComposableTopDownInstance.contractAddress, 32).toLowerCase();
+
+                // when:
+                await composableTopDownInstance.from(alice)
+                    .transferFrom(alice.address, secondComposableTopDownInstance.contractAddress, expectedTokenId);
+
+                // then:
+                const owner = await composableTopDownInstance.rootOwnerOfChild(sampleNFTInstance.contractAddress, expectedTokenId);
+                assert(owner === expectedRootOwnerOfChild, 'Invalid owner');
+            });
+
+            it('Should successfully transfer ERC998 to SecondComposable', async () => {
+                // given:
+                const expectedRootOwnerOf = ethers.utils.hexZeroPad(secondComposableTopDownInstance.contractAddress, 32).toLowerCase();
+                const expectedSecondComposableRootOwnerOf = ethers.utils.hexZeroPad(bob.address, 32).toLowerCase();
+
+                await composableTopDownInstance.from(alice)['safeTransferFrom(address,address,uint256,bytes)'](
+                    alice.address,
+                    secondComposableTopDownInstance.contractAddress,
+                    expectedTokenId,
+                    bytesFirstToken
+                );
+
+                const owner = await composableTopDownInstance.ownerOf(expectedTokenId);
+                assert(owner === secondComposableTopDownInstance.contractAddress, 'Invalid address');
+
+                const totalChildContracts = await secondComposableTopDownInstance.totalChildContracts(expectedTokenId);
+                assert(totalChildContracts.eq(1), 'Invalid total child contracts');
+
+                const rootOwnerOf = await composableTopDownInstance.rootOwnerOf(expectedTokenId);
+                assert(rootOwnerOf === expectedRootOwnerOf, 'Invalid first composable rootOwnerOf');
+                const ownerOf = await secondComposableTopDownInstance.rootOwnerOfChild(composableTopDownInstance.contractAddress, expectedTokenId);
+                assert(ownerOf === expectedSecondComposableRootOwnerOf, 'Invalid second composable rootOwnerOfChild');
             });
 
             it('Should successfully transfer NFT from ComposableTopDown to ComposableTopDown', async () => {
@@ -1015,7 +1114,7 @@ describe('ComposableTopDown', async () => {
                 const firstComposableTotalChildTokens = await composableTopDownInstance.totalChildTokens(expectedTokenId, sampleNFTInstance.contractAddress);
                 assert(firstComposableTotalChildTokens.eq(0), 'Invalid First Composable Total Child Tokens');
 
-                // Second Composable
+                // Second Composable:
                 const childExists = await secondComposableTopDownInstance.childExists(sampleNFTInstance.contractAddress, firstChildTokenId);
                 assert(childExists, 'Composable does not own SampleNFT');
 
@@ -1191,6 +1290,119 @@ describe('ComposableTopDown', async () => {
                     .balanceOfERC20(expectedTokenId, sampleERC20Instance.contractAddress);
                 assert(secondComposableTokenIdBalance.eq(transferAmount), 'Invalid second composable tokenId balance');
             });
+        });
+    });
+
+    describe('Multiple TopDowns scenario', async () => {
+        const bytesFirst = ethers.utils.hexZeroPad('0x1', 32);
+        const bytesSecond = ethers.utils.hexZeroPad('0x2', 32);
+        const bytesThird = ethers.utils.hexZeroPad('0x3', 32);
+
+        beforeEach(async () => {
+            // Introduce ComposableTopDown, which represents accounts, (e.g. alice and bob have accounts)
+            // Introduce ComposableTopDown, which represents characters
+            // Introduce ComposableTopDown, which represents weapons (e.g. axes, swords, etc.)
+            // Introduce ERC721, which represents enchantments
+            // Accounts can have characters, characters can have weapons, weapons can have enchantments
+
+            // Create alice and bob accounts
+            erc998Accounts = await deployer.deploy(
+                ComposableTopDown,
+                {}
+            );
+            await erc998Accounts.mint(alice.address);
+            await erc998Accounts.mint(bob.address);
+
+            // Create two characters
+            erc998Characters = await deployer.deploy(
+                ComposableTopDown,
+                {}
+            );
+            await erc998Characters.mint(owner.signer.address); // first character
+            await erc998Characters.mint(owner.signer.address); // second character
+
+            erc998Weapons = await deployer.deploy(
+                ComposableTopDown,
+                {}
+            );
+            await erc998Weapons.mint(owner.signer.address); // id 1
+            await erc998Weapons.mint(owner.signer.address); // id 2
+            await erc998Weapons.mint(owner.signer.address); // id 3
+        });
+
+        it('Should successfully populate accounts', async () => {
+            erc721Enchantments = await deployer.deploy(SampleNFT, {});
+
+            // Mint enchantments
+            await erc721Enchantments.mint721(owner.signer.address, 'enchantment1'); // id 1
+            await erc721Enchantments.mint721(owner.signer.address, 'enchantment2'); // id 2
+            await erc721Enchantments.mint721(owner.signer.address, 'enchantment3'); // id 3
+            await erc721Enchantments.mint721(owner.signer.address, 'enchantment4'); // id 4
+
+            // Transfer 1,2 to first weapon, 3 to second weapon, 4 to third weapon
+            await erc721Enchantments['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Weapons.contractAddress,
+                1,
+                bytesFirst);
+            await erc721Enchantments['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Weapons.contractAddress,
+                2,
+                bytesFirst);
+            await erc721Enchantments['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Weapons.contractAddress,
+                3,
+                bytesSecond);
+
+            await erc721Enchantments['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Weapons.contractAddress,
+                4,
+                bytesThird);
+
+            // Transfer 1,2 Weapons to First Character, 3 to Second Character
+            await erc998Weapons['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Characters.contractAddress,
+                1,
+                bytesFirst);
+            await erc998Weapons['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Characters.contractAddress,
+                2,
+                bytesFirst);
+            await erc998Weapons['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Characters.contractAddress,
+                3,
+                bytesSecond);
+
+            // Transfer Characters to Accounts
+            await erc998Characters['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Accounts.contractAddress,
+                1,
+                bytesFirst);
+            await erc998Characters['safeTransferFrom(address,address,uint256,bytes)'](
+                owner.signer.address,
+                erc998Accounts.contractAddress,
+                2,
+                bytesSecond);
+
+            const aliceAccountChildContracts = await erc998Accounts.totalChildContracts(1);
+            assert(aliceAccountChildContracts.eq(1), 'Invalid alice child contracts');
+
+            const bobAccountChildContracts = await erc998Accounts.totalChildContracts(2);
+            assert(bobAccountChildContracts.eq(1), 'Invalid bob child contracts');
+            
+            await erc998Weapons.from(alice)['safeTransferChild(uint256,address,address,uint256)'](
+                1,
+                erc998Weapons.contractAddress,
+                erc721Enchantments.contractAddress,
+                bytesSecond
+            );
         });
     });
 
