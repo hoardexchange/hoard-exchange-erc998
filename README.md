@@ -63,4 +63,4 @@ etherlime coverage --solcVersion=0.7.0 --timeout 20000
 * `transferERC20` ~ 64 790 gas
 * `transferERC223` ~ 112 149 gas
 
-`NB!` Gas estimations include first-time storage allocation and storage deallocation.
+`NB!` Gas usages above are average values of method executions, which include first-time storage allocation and storage deallocation.
