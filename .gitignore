@@ -110,3 +110,7 @@ dist
 build
 
 .DS_STORE
+
+#Hardhat files
+cache
+artifacts
