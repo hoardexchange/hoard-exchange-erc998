@@ -33,17 +33,17 @@ contract ComposableTopDown is
     uint256 tokenCount = 0;
 
     // tokenId => token owner
-    mapping(uint256 => address) internal tokenIdToTokenOwner;
+    mapping(uint256 => address) private tokenIdToTokenOwner;
 
     // root token owner address => (tokenId => approved address)
     mapping(address => mapping(uint256 => address))
-        internal rootOwnerAndTokenIdToApprovedAddress;
+        private rootOwnerAndTokenIdToApprovedAddress;
 
     // token owner address => token count
-    mapping(address => uint256) internal tokenOwnerToTokenCount;
+    mapping(address => uint256) private tokenOwnerToTokenCount;
 
     // token owner => (operator address => bool)
-    mapping(address => mapping(address => bool)) internal tokenOwnerToOperators;
+    mapping(address => mapping(address => bool)) private tokenOwnerToOperators;
 
     //constructor(string _name, string _symbol) public ERC721Token(_name, _symbol) {}
 
@@ -340,7 +340,7 @@ contract ComposableTopDown is
         private childTokens;
 
     // child address => childId => tokenId
-    mapping(address => mapping(uint256 => uint256)) internal childTokenOwner;
+    mapping(address => mapping(uint256 => uint256)) private childTokenOwner;
 
     function safeTransferChild(
         uint256 _fromTokenId,
@@ -386,7 +386,7 @@ contract ComposableTopDown is
         //does not work with current standard which does not allow approving self, so we must let it fail in that case.
         bytes memory callData =
             abi.encodeWithSelector(APPROVE, this, _childTokenId);
-        (bool callSuccess, bytes memory data) = _childContract.call(callData);
+        _childContract.call(callData);
 
         IERC721(_childContract).transferFrom(address(this), _to, _childTokenId);
         emit TransferChild(_fromTokenId, _to, _childContract, _childTokenId);
@@ -552,7 +552,7 @@ contract ComposableTopDown is
         address _to,
         address _childContract,
         uint256 _childTokenId
-    ) internal {
+    ) private {
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId > 0 ||
@@ -579,7 +579,7 @@ contract ComposableTopDown is
     }
 
     function _ownerOfChild(address _childContract, uint256 _childTokenId)
-        internal
+        private
         view
         returns (address parentTokenOwner, uint256 parentTokenId)
     {
@@ -595,7 +595,7 @@ contract ComposableTopDown is
     }
 
     function _parseTokenId(bytes memory _data, uint256 _position)
-        internal
+        private
         pure
         returns (uint256)
     {
