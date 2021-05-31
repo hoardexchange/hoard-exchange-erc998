@@ -44,7 +44,7 @@ describe('ComposableTopDown', async () => {
             // mint
             await sampleNFTInstance.mint721(alice.address, NFTHash);
 
-            await composableTopDownInstance.mint(alice.address);
+            await composableTopDownInstance.safeMint(alice.address);
         });
 
         it('Should revert when trying to get balanceOf zero address', async () => {
@@ -487,7 +487,7 @@ describe('ComposableTopDown', async () => {
                 const expectedFirstTokenTotalChildTokens = 1;
 
                 beforeEach(async () => {
-                    await composableTopDownInstance.mint(alice.address);
+                    await composableTopDownInstance.safeMint(alice.address);
                     await sampleNFTInstance.mint721(alice.address, secondNFTHash);
 
                     await sampleNFTInstance
@@ -606,7 +606,7 @@ describe('ComposableTopDown', async () => {
             // mint
             await sampleERC20Instance.mint(alice.address, mintTokensAmount);
 
-            await composableTopDownInstance.mint(alice.address);
+            await composableTopDownInstance.safeMint(alice.address);
         });
 
         it('Should have proper token balance', async () => {
@@ -852,7 +852,7 @@ describe('ComposableTopDown', async () => {
         const mintedPerNFT = 3;
 
         beforeEach(async () => {
-            await composableTopDownInstance.mint(alice.address);
+            await composableTopDownInstance.safeMint(alice.address);
         });
 
         it('Should return proper totals after addition and removal', async () => {
@@ -942,8 +942,8 @@ describe('ComposableTopDown', async () => {
             beforeEach(async () => {
                 sampleNFTInstance = await SampleNFT.deploy();
 
-                await composableTopDownInstance.mint(alice.address);
-                await composableTopDownInstance.mint(bob.address);
+                await composableTopDownInstance.safeMint(alice.address);
+                await composableTopDownInstance.safeMint(bob.address);
 
                 for (let i = 1; i <= 5; i++) {
                     await sampleNFTInstance.mint721(alice.address, i.toString());
@@ -974,8 +974,8 @@ describe('ComposableTopDown', async () => {
 
         describe('5 different NFTs', async () => {
             beforeEach(async () => {
-                await composableTopDownInstance.mint(alice.address);
-                await composableTopDownInstance.mint(bob.address);
+                await composableTopDownInstance.safeMint(alice.address);
+                await composableTopDownInstance.safeMint(bob.address);
 
                 const [nfts, _] = await setUpTestTokens(5, 0);
                 nftInstances = nfts;
@@ -1009,8 +1009,8 @@ describe('ComposableTopDown', async () => {
         beforeEach(async () => {
             secondComposableTopDownInstance = await ComposableTopDown.deploy();
 
-            await composableTopDownInstance.mint(alice.address);
-            await secondComposableTopDownInstance.mint(bob.address);
+            await composableTopDownInstance.safeMint(alice.address);
+            await secondComposableTopDownInstance.safeMint(bob.address);
         });
 
         describe('NFTs', async () => {
@@ -1281,18 +1281,18 @@ describe('ComposableTopDown', async () => {
 
             // Create alice and bob accounts
             erc998Accounts = await ComposableTopDown.connect(owner).deploy();
-            await erc998Accounts.mint(alice.address);
-            await erc998Accounts.mint(bob.address);
+            await erc998Accounts.safeMint(alice.address);
+            await erc998Accounts.safeMint(bob.address);
 
             // Create two characters
             erc998Characters = await ComposableTopDown.connect(owner).deploy();
-            await erc998Characters.mint(owner.address); // first character
-            await erc998Characters.mint(owner.address); // second character
+            await erc998Characters.safeMint(owner.address); // first character
+            await erc998Characters.safeMint(owner.address); // second character
 
             erc998Weapons = await ComposableTopDown.connect(owner).deploy();
-            await erc998Weapons.mint(owner.address); // id 1
-            await erc998Weapons.mint(owner.address); // id 2
-            await erc998Weapons.mint(owner.address); // id 3
+            await erc998Weapons.safeMint(owner.address); // id 1
+            await erc998Weapons.safeMint(owner.address); // id 2
+            await erc998Weapons.safeMint(owner.address); // id 3
         });
 
         it('Should successfully populate accounts and then showcase how the deepest level NFT is transferred', async () => {

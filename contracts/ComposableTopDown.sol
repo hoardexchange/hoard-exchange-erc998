@@ -47,13 +47,14 @@ contract ComposableTopDown is
 
     //constructor(string _name, string _symbol) public ERC721Token(_name, _symbol) {}
 
-    // wrapper on minting new 721
-    // @notice Be cautious when minting to contracts
-    function mint(address _to) public returns (uint256) {
+    function safeMint(address _to) public returns (uint256) {
+        require(_to != address(0), "ComposableTopDown: _to zero address");
         tokenCount++;
         uint256 tokenCount_ = tokenCount;
         tokenIdToTokenOwner[tokenCount_] = _to;
         tokenOwnerToTokenCount[_to]++;
+
+        require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
         return tokenCount_;
     }
 
@@ -609,6 +610,27 @@ contract ComposableTopDown is
         }
 
         return tokenId;
+    }
+
+    function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data)
+        private returns (bool)
+    {
+        if (to.isContract()) {
+            try IERC721Receiver(to).onERC721Received(msg.sender, from, tokenId, _data) returns (bytes4 retval) {
+                return retval == IERC721Receiver(to).onERC721Received.selector;
+            } catch (bytes memory reason) {
+                if (reason.length == 0) {
+                    revert("ERC721: transfer to non ERC721Receiver implementer");
+                } else {
+                    // solhint-disable-next-line no-inline-assembly
+                    assembly {
+                        revert(add(32, reason), mload(reason))
+                    }
+                }
+            }
+        } else {
+            return true;
+        }
     }
 
     function removeChild(
