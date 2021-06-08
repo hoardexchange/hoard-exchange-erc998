@@ -55,6 +55,7 @@ contract ComposableTopDown is
         tokenOwnerToTokenCount[_to]++;
 
         require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
+        emit Transfer(address(0), _to, tokenCount_);
         return tokenCount_;
     }
 
