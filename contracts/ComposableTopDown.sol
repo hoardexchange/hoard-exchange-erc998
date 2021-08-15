@@ -266,6 +266,7 @@ contract ComposableTopDown is
                 retval == ERC721_RECEIVED_OLD || retval == ERC721_RECEIVED_NEW,
                 "ComposableTopDown: safeTransferFrom(4) onERC721Received invalid return value"
             );
+            rootOwnerOf(_tokenId);
         }
     }
 

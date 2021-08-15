@@ -600,6 +600,57 @@ describe('ComposableTopDown', async () => {
                     assert(rootOwnerOfChild === expectedRootOwnerOfChild, 'Invalid rootOwnerOfChild token 2');
                 });
             });
+
+            it('Should not allow circular ownership (1)', async () => {
+                // the second token, token id = 2
+                await composableTopDownInstance.safeMint(alice.address);
+                // transfer 2 -> 1
+                await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        2,
+                        bytesFirstToken);
+                // transfer 1 -> 2
+                const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
+                let res = await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        1,
+                        bytesSecondToken).then((result) => {return null;}).catch((err) => {return err;});
+                expect(res).to.exist;
+                expect(res['message']).to.be.eq('Transaction ran out of gas');
+            });
+
+            it('Should not allow circular ownership (2)', async () => {
+                // the second token, token id = 2
+                await composableTopDownInstance.safeMint(alice.address);
+                // the third token, token id = 3
+                await composableTopDownInstance.safeMint(alice.address);
+                // transfer 2 -> 1
+                await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        2,
+                        bytesFirstToken);
+                // transfer 3 -> 2
+                const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
+                await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        3,
+                        bytesSecondToken);
+                // transfer 2 -> 3
+                const bytesThirdToken = ethers.utils.hexZeroPad('0x3', 20);
+                let res = await composableTopDownInstance.connect(alice)['safeTransferChild(uint256,address,address,uint256,bytes)']
+                    (1,
+                        composableTopDownInstance.address,
+                        composableTopDownInstance.address,
+                        2,
+                        bytesThirdToken).then((result) => {return null;}).catch((err) => {return err;});
+                expect(res).to.exist;
+                expect(res['message']).to.be.eq('Transaction reverted: contract call run out of gas and made the transaction revert');
+            });
+
         });
     });
 
@@ -1037,6 +1088,7 @@ describe('ComposableTopDown', async () => {
                 // given:
                 const expectedRootOwnerOfChild = ethers.utils.hexConcat([ERC998_MAGIC_VALUE, ethers.utils.hexZeroPad(secondComposableTopDownInstance.address, 28).toLowerCase()]);
 
+                // WARNING: never ever do that, direct transferring a token to another composable causes that the token get stuck!
                 // when:
                 await composableTopDownInstance.connect(alice)
                     .transferFrom(alice.address, secondComposableTopDownInstance.address, expectedTokenId);
