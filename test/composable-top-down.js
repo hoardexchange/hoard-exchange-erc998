@@ -14,6 +14,7 @@ describe('ComposableTopDown', async () => {
 
     const bytesFirstToken = ethers.utils.hexZeroPad('0x1', 20);
     const zeroAddress = ethers.utils.hexZeroPad('0x0', 20);
+    const ERC998_MAGIC_VALUE = '0xcd740db5';
 
     const NFTHash = '0x1234';
 
@@ -24,7 +25,7 @@ describe('ComposableTopDown', async () => {
             owner,
             nonUsed,
         ] = await ethers.getSigners();
-        aliceBytes32Address = ethers.utils.hexZeroPad(alice.address, 32).toLowerCase();
+        aliceBytes32Address = ethers.utils.hexConcat([ERC998_MAGIC_VALUE, ethers.utils.hexZeroPad(alice.address, 28).toLowerCase()]);
 
         ComposableTopDown = await ethers.getContractFactory("ComposableTopDown");
         SampleERC20 = await ethers.getContractFactory("SampleERC20");
@@ -121,6 +122,16 @@ describe('ComposableTopDown', async () => {
                 composableTopDownInstance.address,
                 expectedTokenId),
                 expectedRevertMessage).to.be.revertedWith(expectedRevertMessage);
+        });
+
+        it('Should return the magic value ', async () => {
+            await safeTransferFromFirstToken();
+            let aliceOwner = await composableTopDownInstance.rootOwnerOf(firstChildTokenId);
+            assert(aliceOwner.startsWith(ERC998_MAGIC_VALUE), 'ComposableTopDown: the magic value was not returned by rootOwnerOfChild (1)');
+            assert(aliceOwner.endsWith(alice.address.toLowerCase().substring(2)), 'ComposableTopDown: rootOwnerOfChild: alice should be the owner');
+
+            const expectedRevertMessage = 'ComposableTopDown: ownerOf _tokenId zero address';
+            await expect(composableTopDownInstance.rootOwnerOf(112233)).to.be.revertedWith(expectedRevertMessage);
         });
 
         describe('Composable Approvals', async () => {
@@ -524,7 +535,7 @@ describe('ComposableTopDown', async () => {
 
                 it('Should successfully safeTransferChild(5)', async () => {
                     // given:
-                    const expectedRootOwnerOfChild = ethers.utils.hexZeroPad(alice.address, 32).toLowerCase();
+                    const expectedRootOwnerOfChild = aliceBytes32Address;
 
                     // when:
                     await composableTopDownInstance
@@ -558,7 +569,7 @@ describe('ComposableTopDown', async () => {
 
                 it('Should successfully safeTransferChild(4)', async () => {
                     // given:
-                    const expectedRootOwnerOfChild = ethers.utils.hexZeroPad(alice.address, 32).toLowerCase();
+                    const expectedRootOwnerOfChild = aliceBytes32Address;
 
                     // when:
                     await composableTopDownInstance
@@ -589,6 +600,57 @@ describe('ComposableTopDown', async () => {
                     assert(rootOwnerOfChild === expectedRootOwnerOfChild, 'Invalid rootOwnerOfChild token 2');
                 });
             });
+
+            it('Should not allow circular ownership (1)', async () => {
+                // the second token, token id = 2
+                await composableTopDownInstance.safeMint(alice.address);
+                // transfer 2 -> 1
+                await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        2,
+                        bytesFirstToken);
+                // transfer 1 -> 2
+                const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
+                let res = await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        1,
+                        bytesSecondToken).then((result) => {return null;}).catch((err) => {return err;});
+                expect(res).to.exist;
+                expect(res['message']).to.be.eq('Transaction ran out of gas');
+            });
+
+            it('Should not allow circular ownership (2)', async () => {
+                // the second token, token id = 2
+                await composableTopDownInstance.safeMint(alice.address);
+                // the third token, token id = 3
+                await composableTopDownInstance.safeMint(alice.address);
+                // transfer 2 -> 1
+                await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        2,
+                        bytesFirstToken);
+                // transfer 3 -> 2
+                const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
+                await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        3,
+                        bytesSecondToken);
+                // transfer 2 -> 3
+                const bytesThirdToken = ethers.utils.hexZeroPad('0x3', 20);
+                let res = await composableTopDownInstance.connect(alice)['safeTransferChild(uint256,address,address,uint256,bytes)']
+                    (1,
+                        composableTopDownInstance.address,
+                        composableTopDownInstance.address,
+                        2,
+                        bytesThirdToken).then((result) => {return null;}).catch((err) => {return err;});
+                expect(res).to.exist;
+                expect(res['message']).to.be.eq('Transaction reverted: contract call run out of gas and made the transaction revert');
+            });
+
         });
     });
 
@@ -1024,8 +1086,9 @@ describe('ComposableTopDown', async () => {
 
             it('Should successfully transfer tokenId to ComposableTopDown', async () => {
                 // given:
-                const expectedRootOwnerOfChild = ethers.utils.hexZeroPad(secondComposableTopDownInstance.address, 32).toLowerCase();
+                const expectedRootOwnerOfChild = ethers.utils.hexConcat([ERC998_MAGIC_VALUE, ethers.utils.hexZeroPad(secondComposableTopDownInstance.address, 28).toLowerCase()]);
 
+                // WARNING: never ever do that, direct transferring a token to another composable causes that the token get stuck!
                 // when:
                 await composableTopDownInstance.connect(alice)
                     .transferFrom(alice.address, secondComposableTopDownInstance.address, expectedTokenId);
@@ -1037,8 +1100,8 @@ describe('ComposableTopDown', async () => {
 
             it('Should successfully transfer ERC998 to SecondComposable', async () => {
                 // given:
-                const expectedRootOwnerOf = ethers.utils.hexZeroPad(secondComposableTopDownInstance.address, 32).toLowerCase();
-                const expectedSecondComposableRootOwnerOf = ethers.utils.hexZeroPad(bob.address, 32).toLowerCase();
+                const expectedRootOwnerOf = ethers.utils.hexConcat([ERC998_MAGIC_VALUE, ethers.utils.hexZeroPad(secondComposableTopDownInstance.address, 28).toLowerCase()]);
+                const expectedSecondComposableRootOwnerOf = ethers.utils.hexConcat([ERC998_MAGIC_VALUE, ethers.utils.hexZeroPad(bob.address, 28).toLowerCase()]);
 
                 await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)'](
                     alice.address,
@@ -1054,7 +1117,7 @@ describe('ComposableTopDown', async () => {
                 assert(totalChildContracts.eq(1), 'Invalid total child contracts');
 
                 const rootOwnerOf = await composableTopDownInstance.rootOwnerOf(expectedTokenId);
-                assert(rootOwnerOf === expectedRootOwnerOf, 'Invalid first composable rootOwnerOf');
+                assert(rootOwnerOf === expectedSecondComposableRootOwnerOf, 'Invalid first composable rootOwnerOf');
                 const ownerOf = await secondComposableTopDownInstance.rootOwnerOfChild(composableTopDownInstance.address, expectedTokenId);
                 assert(ownerOf === expectedSecondComposableRootOwnerOf, 'Invalid second composable rootOwnerOfChild');
             });
@@ -1394,6 +1457,18 @@ describe('ComposableTopDown', async () => {
             const secondWeaponEnchantmentsAfterTransfer = await erc998Weapons.totalChildTokens(2, erc721Enchantments.address);
             assert(secondWeaponEnchantmentsAfterTransfer.eq(secondWeaponEnchantmentsBeforeTransfer.add(1)),
                 'Invalid total child contracts');
+        });
+    });
+
+    describe('ERC165', async () => {
+        it('Should declare interfaces: ERC165, ERC721, IERC998ERC721TopDown, IERC998ERC721TopDownEnumerable, IERC998ERC20TopDown, IERC998ERC20TopDownEnumerable', async () => {
+            assert(await composableTopDownInstance.supportsInterface('0x01ffc9a7'), 'No interface declaration: ERC165');
+            assert(await composableTopDownInstance.supportsInterface('0x80ac58cd'), 'No interface declaration: ERC721');
+            assert(await composableTopDownInstance.supportsInterface('0x1bc995e4'), 'No interface declaration: IERC998ERC721TopDown from spec');
+            assert(await composableTopDownInstance.supportsInterface('0xcde244d9'), 'No interface declaration: IERC998ERC721TopDown');
+            assert(await composableTopDownInstance.supportsInterface('0xa344afe4'), 'No interface declaration: IERC998ERC721TopDownEnumerable');
+            assert(await composableTopDownInstance.supportsInterface('0x7294ffed'), 'No interface declaration: IERC998ERC20TopDown');
+            assert(await composableTopDownInstance.supportsInterface('0xc5fd96cd'), 'No interface declaration: IERC998ERC20TopDownEnumerable');
         });
     });
 
