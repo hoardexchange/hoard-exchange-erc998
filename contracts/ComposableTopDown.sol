@@ -266,7 +266,6 @@ contract ComposableTopDown is
                 retval == ERC721_RECEIVED_OLD || retval == ERC721_RECEIVED_NEW,
                 "ComposableTopDown: safeTransferFrom(4) onERC721Received invalid return value"
             );
-            rootOwnerOf(_tokenId);
         }
     }
 
@@ -446,6 +445,8 @@ contract ComposableTopDown is
             address(this),
             _childTokenId
         );
+        // a check for looped ownership chain
+        rootOwnerOf(_tokenId);
     }
 
     function onERC721Received(
@@ -464,6 +465,8 @@ contract ComposableTopDown is
             IERC721(msg.sender).ownerOf(_childTokenId) != address(0),
             "ComposableTopDown: onERC721Received(3) child token not owned"
         );
+        // a check for looped ownership chain
+        rootOwnerOf(tokenId);
         return ERC721_RECEIVED_OLD;
     }
 
@@ -484,6 +487,8 @@ contract ComposableTopDown is
             IERC721(msg.sender).ownerOf(_childTokenId) != address(0),
             "ComposableTopDown: onERC721Received(4) child token not owned"
         );
+        // a check for looped ownership chain
+        rootOwnerOf(tokenId);
         return ERC721_RECEIVED_NEW;
     }
 
