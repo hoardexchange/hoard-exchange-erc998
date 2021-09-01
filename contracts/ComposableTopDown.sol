@@ -36,6 +36,9 @@ contract ComposableTopDown is
     // tokenId => token owner
     mapping(uint256 => address) private tokenIdToTokenOwner;
 
+    // tokenId => last modification time indicator
+    mapping(uint256 => uint256) private tokenIdToLastModification;
+
     // root token owner address => (tokenId => approved address)
     mapping(address => mapping(uint256 => address))
         private rootOwnerAndTokenIdToApprovedAddress;
@@ -54,6 +57,7 @@ contract ComposableTopDown is
         uint256 tokenCount_ = tokenCount;
         tokenIdToTokenOwner[tokenCount_] = _to;
         tokenOwnerToTokenCount[_to]++;
+        tokenIdToLastModification[tokenCount] = (block.timestamp << 216) + tokenCount;  // 216 = 256-40, tokenCount < 2**216
 
         require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
         emit Transfer(address(0), _to, tokenCount_);
@@ -648,6 +652,7 @@ contract ComposableTopDown is
         if (lastTokenIndex == 0) {
             childContracts[_tokenId].remove(_childContract);
         }
+        _updateLastModification(_tokenId, _childContract, _childTokenId);
     }
 
     function receiveChild(
@@ -671,6 +676,7 @@ contract ComposableTopDown is
         }
         childTokens[_tokenId][_childContract].add(_childTokenId);
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
+        _updateLastModification(_tokenId, _childContract, _childTokenId);
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
     }
 
@@ -840,6 +846,7 @@ contract ComposableTopDown is
             erc20Contracts[_tokenId].add(_erc20Contract);
         }
         erc20Balances[_tokenId][_erc20Contract] += _value;
+        _updateLastModification(_tokenId, _erc20Contract, erc20Balance + _value);
         emit ReceivedERC20(_from, _tokenId, _erc20Contract, _value);
     }
 
@@ -863,6 +870,7 @@ contract ComposableTopDown is
             if (newERC20Balance == 0) {
                 erc20Contracts[_tokenId].remove(_erc20Contract);
             }
+            _updateLastModification(_tokenId, _erc20Contract, newERC20Balance);
         }
     }
 
@@ -884,6 +892,27 @@ contract ComposableTopDown is
             || interfaceId == type(IERC998ERC20TopDownEnumerable).interfaceId
             || interfaceId == 0x1bc995e4
             || super.supportsInterface(interfaceId);
+    }
+
+    ////////////////////////////////////////////////////////
+    // Last Modification Time
+    ////////////////////////////////////////////////////////
+
+    function _updateLastModification(uint256 tokenId, address childContract, uint256 value) private {
+        uint256 _blockTimestamp = block.timestamp << 216;  // 256-40
+        uint256 _newLastModification = _blockTimestamp + (uint256(keccak256(abi.encodePacked(tokenIdToLastModification[tokenId], childContract, value))) >> 40);
+        tokenIdToLastModification[tokenId] = _newLastModification;
+        while (tokenIdToTokenOwner[tokenId] == address(this)) {
+            tokenId = childTokenOwner[address(this)][tokenId];
+            _newLastModification = _blockTimestamp + (uint256(keccak256(abi.encodePacked(tokenIdToLastModification[tokenId], address(this), _newLastModification))) >> 40);
+            tokenIdToLastModification[tokenId] = _newLastModification;
+        }
+    }
+
+    function lastModification(uint256 tokenId) public view returns (uint256) {
+        uint256 _lastModification = tokenIdToLastModification[tokenId];
+        require(_lastModification > 0, "ComposableTopDown: lastModification of _tokenId is zero");
+        return _lastModification;
     }
 
 }
