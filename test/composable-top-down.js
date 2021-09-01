@@ -618,7 +618,7 @@ describe('ComposableTopDown', async () => {
                         1,
                         bytesSecondToken).then((result) => {return null;}).catch((err) => {return err;});
                 expect(res).to.exist;
-                expect(res['message']).to.be.eq('Transaction ran out of gas');
+                expect(res['message']).to.be.eq('Transaction reverted: contract call run out of gas and made the transaction revert');
             });
 
             it('Should not allow circular ownership (2)', async () => {
