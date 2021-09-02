@@ -1472,24 +1472,22 @@ describe('ComposableTopDown', async () => {
         });
     });
 
-    describe('LastModification', async () => {
-        it('Should set last modification (1)', async () => {
+    describe('StateHash', async () => {
+        it('Should set state hash (1)', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
             tx = await tx.wait();
-            let expectedLastModification = ethers.BigNumber.from((await ethers.provider.getBlock(tx.blockNumber)).timestamp);
-            expectedLastModification = expectedLastModification.mul(ethers.BigNumber.from(2).pow(216));
-            expectedLastModification = expectedLastModification.add(1);
-            let lastModification = await composableTopDownInstance.lastModification(1);
-            assert(lastModification.eq(expectedLastModification), "Wrong last modification for tokenId 1");
+            let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256"], [composableTopDownInstance.address, ethers.BigNumber.from(1)]);
+            let stateHash = await composableTopDownInstance.stateHash(1);
+            assert(stateHash.eq(expectedStateHash), "Wrong state hash for tokenId 1");
         });
-        it('Should set last modification (2)', async () => {
+        it('Should set state hash (2)', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
             tx = await tx.wait();
             tx = await composableTopDownInstance.safeMint(alice.address);  // 2 tokenId
             tx = await tx.wait();
             const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
-            let lastModification11 = await composableTopDownInstance.lastModification(1);
-            let lastModification21 = await composableTopDownInstance.lastModification(2);
+            let stateHash11 = await composableTopDownInstance.stateHash(1);
+            let stateHash21 = await composableTopDownInstance.stateHash(2);
 
             tx = await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
                     (alice.address,
@@ -1497,10 +1495,10 @@ describe('ComposableTopDown', async () => {
                         2,
                         bytesFirstToken);
             tx = await tx.wait();
-            let lastModification12 = await composableTopDownInstance.lastModification(1);
-            assert(lastModification12.gt(lastModification11), "Last modification update (1)");
-            let lastModification22 = await composableTopDownInstance.lastModification(2);
-            assert(lastModification22.eq(lastModification21), "Last modification update (2)");
+            let stateHash12 = await composableTopDownInstance.stateHash(1);
+            assert(!stateHash12.eq(stateHash11), "state hash update (1)");
+            let stateHash22 = await composableTopDownInstance.stateHash(2);
+            assert(stateHash22.eq(stateHash21), "state hash update (2)");
 
             const [nfts, erc20s] = await setUpTestTokens(1, 1);
 
@@ -1512,10 +1510,10 @@ describe('ComposableTopDown', async () => {
                         1,  //mintedTokenId
                         bytesSecondToken);
             tx = await tx.wait();
-            let lastModification13 = await composableTopDownInstance.lastModification(1);
-            assert(lastModification13.gt(lastModification12), "Last modification update (3)");
-            let lastModification23 = await composableTopDownInstance.lastModification(2);
-            assert(lastModification23.gt(lastModification22), "Last modification update (4)");
+            let stateHash13 = await composableTopDownInstance.stateHash(1);
+            assert(!stateHash13.eq(stateHash12), "state hash update (3)");
+            let stateHash23 = await composableTopDownInstance.stateHash(2);
+            assert(!stateHash23.eq(stateHash22), "state hash update (4)");
 
             await erc20s[0].mint(alice.address, 10);
             await erc20s[0].connect(alice)['transfer(address,uint256,bytes)'](
@@ -1523,15 +1521,15 @@ describe('ComposableTopDown', async () => {
                     10, //transferAmount
                     bytesSecondToken
                 );
-            let lastModification14 = await composableTopDownInstance.lastModification(1);
-            assert(lastModification14.gt(lastModification13), "Last modification update (5)");
-            let lastModification24 = await composableTopDownInstance.lastModification(2);
-            assert(lastModification24.gt(lastModification23), "Last modification update (6)");
+            let stateHash14 = await composableTopDownInstance.stateHash(1);
+            assert(!stateHash14.eq(stateHash13), "state hash update (5)");
+            let stateHash24 = await composableTopDownInstance.stateHash(2);
+            assert(!stateHash24.eq(stateHash23), "state hash update (6)");
         });
-        it('Should set last modification (3)', async () => {
+        it('Should set state hash (3)', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
             tx = await tx.wait();
-            let lastModification1 = await composableTopDownInstance.lastModification(1);
+            let stateHash1 = await composableTopDownInstance.stateHash(1);
             const [nfts, erc20s] = await setUpTestTokens(1, 1);
             tx = await nfts[0].mint721(alice.address, '00');
             tx = await tx.wait();
@@ -1541,16 +1539,11 @@ describe('ComposableTopDown', async () => {
                         1,  //mintedTokenId
                         bytesFirstToken);
             tx = await tx.wait();
-            let lastModification2 = await composableTopDownInstance.lastModification(1);
+            let stateHash2 = await composableTopDownInstance.stateHash(1);
 
-            let expectedLastModification = ethers.utils.solidityKeccak256(["uint256", "address", "uint256"], [lastModification1, nfts[0].address, ethers.BigNumber.from(1)]);
-            expectedLastModification = ethers.BigNumber.from(expectedLastModification);
-            expectedLastModification = expectedLastModification.div(ethers.BigNumber.from(2).pow(40));
-            let blockTimestamp = ethers.BigNumber.from((await ethers.provider.getBlock(tx.blockNumber)).timestamp);
-            blockTimestamp = blockTimestamp.mul(ethers.BigNumber.from(2).pow(216));
-            expectedLastModification = expectedLastModification.add(blockTimestamp);
+            let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "uint256"], [stateHash1, nfts[0].address, ethers.BigNumber.from(1)]);
 
-            assert(lastModification2.eq(expectedLastModification), "Wrong last modification for tokenId 1");
+            assert(stateHash2.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
         });
     });
 
