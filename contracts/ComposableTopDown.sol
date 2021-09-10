@@ -36,6 +36,9 @@ contract ComposableTopDown is
     // tokenId => token owner
     mapping(uint256 => address) private tokenIdToTokenOwner;
 
+    // tokenId => last state hash indicator
+    mapping(uint256 => uint256) private tokenIdToStateHash;
+
     // root token owner address => (tokenId => approved address)
     mapping(address => mapping(uint256 => address))
         private rootOwnerAndTokenIdToApprovedAddress;
@@ -54,6 +57,7 @@ contract ComposableTopDown is
         uint256 tokenCount_ = tokenCount;
         tokenIdToTokenOwner[tokenCount_] = _to;
         tokenOwnerToTokenCount[_to]++;
+        tokenIdToStateHash[tokenCount] = uint256(keccak256(abi.encodePacked(uint256(uint160(address(this))), tokenCount)));
 
         require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
         emit Transfer(address(0), _to, tokenCount_);
@@ -222,7 +226,7 @@ contract ComposableTopDown is
         address _from,
         address _to,
         uint256 _tokenId
-    ) external override {
+    ) public override {
         _transferFrom(_from, _to, _tokenId);
     }
 
@@ -230,7 +234,7 @@ contract ComposableTopDown is
         address _from,
         address _to,
         uint256 _tokenId
-    ) external override {
+    ) public override {
         _transferFrom(_from, _to, _tokenId);
         if (_to.isContract()) {
             bytes4 retval =
@@ -252,7 +256,7 @@ contract ComposableTopDown is
         address _to,
         uint256 _tokenId,
         bytes memory _data
-    ) external override {
+    ) public override {
         _transferFrom(_from, _to, _tokenId);
         if (_to.isContract()) {
             bytes4 retval =
@@ -648,6 +652,7 @@ contract ComposableTopDown is
         if (lastTokenIndex == 0) {
             childContracts[_tokenId].remove(_childContract);
         }
+        _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
     }
 
     function receiveChild(
@@ -671,6 +676,7 @@ contract ComposableTopDown is
         }
         childTokens[_tokenId][_childContract].add(_childTokenId);
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
+        _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
     }
 
@@ -840,6 +846,7 @@ contract ComposableTopDown is
             erc20Contracts[_tokenId].add(_erc20Contract);
         }
         erc20Balances[_tokenId][_erc20Contract] += _value;
+        _updateStateHash(_tokenId, uint256(uint160(_erc20Contract)), erc20Balance + _value);
         emit ReceivedERC20(_from, _tokenId, _erc20Contract, _value);
     }
 
@@ -863,6 +870,7 @@ contract ComposableTopDown is
             if (newERC20Balance == 0) {
                 erc20Contracts[_tokenId].remove(_erc20Contract);
             }
+            _updateStateHash(_tokenId, uint256(uint160(_erc20Contract)), newERC20Balance);
         }
     }
 
@@ -884,6 +892,57 @@ contract ComposableTopDown is
             || interfaceId == type(IERC998ERC20TopDownEnumerable).interfaceId
             || interfaceId == 0x1bc995e4
             || super.supportsInterface(interfaceId);
+    }
+
+    ////////////////////////////////////////////////////////
+    // Last State Hash
+    ////////////////////////////////////////////////////////
+
+    function _updateStateHash(uint256 tokenId, uint256 childReference, uint256 value) private {
+        uint256 _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], childReference, value)));
+        tokenIdToStateHash[tokenId] = _newStateHash;
+        while (tokenIdToTokenOwner[tokenId] == address(this)) {
+            tokenId = childTokenOwner[address(this)][tokenId];
+            _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], uint256(uint160(address(this))), _newStateHash)));
+            tokenIdToStateHash[tokenId] = _newStateHash;
+        }
+    }
+
+    function stateHash(uint256 tokenId) public view returns (uint256) {
+        uint256 _stateHash = tokenIdToStateHash[tokenId];
+        require(_stateHash > 0, "ComposableTopDown: stateHash of _tokenId is zero");
+        return _stateHash;
+    }
+
+    function safeCheckedTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 expectedStateHash
+    ) external {
+        require(expectedStateHash == tokenIdToStateHash[tokenId], "ComposableTopDown: stateHash mismatch (1)");
+        safeTransferFrom(from, to, tokenId);
+    }
+
+    function checkedTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 expectedStateHash
+    ) external {
+        require(expectedStateHash == tokenIdToStateHash[tokenId], "ComposableTopDown: stateHash mismatch (2)");
+        transferFrom(from, to, tokenId);
+    }
+
+    function safeCheckedTransferFrom(
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 expectedStateHash,
+        bytes calldata data
+    ) external {
+        require(expectedStateHash == tokenIdToStateHash[tokenId], "ComposableTopDown: stateHash mismatch (3)");
+        safeTransferFrom(from, to, tokenId, data);
     }
 
 }

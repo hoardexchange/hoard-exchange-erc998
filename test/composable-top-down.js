@@ -1472,6 +1472,81 @@ describe('ComposableTopDown', async () => {
         });
     });
 
+    describe('StateHash', async () => {
+        it('Should set state hash (1)', async () => {
+            let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
+            tx = await tx.wait();
+            let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256"], [composableTopDownInstance.address, ethers.BigNumber.from(1)]);
+            let stateHash = await composableTopDownInstance.stateHash(1);
+            assert(stateHash.eq(expectedStateHash), "Wrong state hash for tokenId 1");
+        });
+        it('Should set state hash (2)', async () => {
+            let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
+            tx = await tx.wait();
+            tx = await composableTopDownInstance.safeMint(alice.address);  // 2 tokenId
+            tx = await tx.wait();
+            const bytesSecondToken = ethers.utils.hexZeroPad('0x2', 20);
+            let stateHash11 = await composableTopDownInstance.stateHash(1);
+            let stateHash21 = await composableTopDownInstance.stateHash(2);
+
+            tx = await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
+                    (alice.address,
+                        composableTopDownInstance.address,
+                        2,
+                        bytesFirstToken);
+            tx = await tx.wait();
+            let stateHash12 = await composableTopDownInstance.stateHash(1);
+            assert(!stateHash12.eq(stateHash11), "state hash update (1)");
+            let stateHash22 = await composableTopDownInstance.stateHash(2);
+            assert(stateHash22.eq(stateHash21), "state hash update (2)");
+
+            const [nfts, erc20s] = await setUpTestTokens(1, 1);
+
+            tx = await nfts[0].mint721(alice.address, '00');
+            tx = await tx.wait();
+            tx = await nfts[0].connect(alice)['safeTransferFrom(address,address,uint256,bytes)'](
+                        alice.address,
+                        composableTopDownInstance.address,
+                        1,  //mintedTokenId
+                        bytesSecondToken);
+            tx = await tx.wait();
+            let stateHash13 = await composableTopDownInstance.stateHash(1);
+            assert(!stateHash13.eq(stateHash12), "state hash update (3)");
+            let stateHash23 = await composableTopDownInstance.stateHash(2);
+            assert(!stateHash23.eq(stateHash22), "state hash update (4)");
+
+            await erc20s[0].mint(alice.address, 10);
+            await erc20s[0].connect(alice)['transfer(address,uint256,bytes)'](
+                    composableTopDownInstance.address,
+                    10, //transferAmount
+                    bytesSecondToken
+                );
+            let stateHash14 = await composableTopDownInstance.stateHash(1);
+            assert(!stateHash14.eq(stateHash13), "state hash update (5)");
+            let stateHash24 = await composableTopDownInstance.stateHash(2);
+            assert(!stateHash24.eq(stateHash23), "state hash update (6)");
+        });
+        it('Should set state hash (3)', async () => {
+            let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
+            tx = await tx.wait();
+            let stateHash1 = await composableTopDownInstance.stateHash(1);
+            const [nfts, erc20s] = await setUpTestTokens(1, 1);
+            tx = await nfts[0].mint721(alice.address, '00');
+            tx = await tx.wait();
+            tx = await nfts[0].connect(alice)['safeTransferFrom(address,address,uint256,bytes)'](
+                        alice.address,
+                        composableTopDownInstance.address,
+                        1,  //mintedTokenId
+                        bytesFirstToken);
+            tx = await tx.wait();
+            let stateHash2 = await composableTopDownInstance.stateHash(1);
+
+            let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "uint256"], [stateHash1, nfts[0].address, ethers.BigNumber.from(1)]);
+
+            assert(stateHash2.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
+        });
+    });
+
     async function setUpTestTokens(nftCount, erc20Count) {
         let nfts = [];
         let erc20s = [];
