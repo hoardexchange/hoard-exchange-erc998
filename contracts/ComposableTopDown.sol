@@ -932,7 +932,8 @@ contract ComposableTopDown is
                 msg.sender,
             "ComposableTopDown: transferERC223 msg.sender not eligible"
         );
-        removeERC1155(_fromTokenId, _erc1155Contract, _childTokenId, _amount);
+        uint256 newBalance = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenId, _amount);
+        _updateStateHash(_fromTokenId, uint256(keccak256(abi.encodePacked(_erc1155Contract, _childTokenId))), newBalance);
         IERC1155(_erc1155Contract).safeTransferFrom(address(this), _to, _childTokenId, _amount, _data);
         emit TransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenId, _amount);
     }
@@ -965,9 +966,13 @@ contract ComposableTopDown is
                 msg.sender,
             "ComposableTopDown: transferERC223 msg.sender not eligible"
         );
+        uint256[] memory childReferences = new uint256[](_childTokenIds.length);
+        uint256[] memory balances = new uint256[](_childTokenIds.length);
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
-            removeERC1155(_fromTokenId, _erc1155Contract, _childTokenIds[i], _amounts[i]);
+            balances[i] = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenIds[i], _amounts[i]);
+            childReferences[i] = uint256(keccak256(abi.encodePacked(_erc1155Contract, _childTokenIds[i])));
         }
+        _updateStateHashBatch(_fromTokenId, childReferences, balances);
         IERC1155(_erc1155Contract).safeBatchTransferFrom(address(this), _to, _childTokenIds, _amounts, _data);
         emit BatchTransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenIds, _amounts);
     }
@@ -1034,6 +1039,7 @@ contract ComposableTopDown is
             erc1155Tokens[tokenId][msg.sender].add(_childTokenId);
         }
         erc1155Balances[tokenId][msg.sender][_childTokenId] = erc1155Balance + _amount;
+        _updateStateHash(tokenId, uint256(keccak256(abi.encodePacked(msg.sender, _childTokenId))), erc1155Balance + _amount);
         emit ReceivedErc1155(_from, tokenId, msg.sender, _childTokenId, _amount);
         return ERC1155_RECEIVED_SINGLE;
     }
@@ -1063,10 +1069,11 @@ contract ComposableTopDown is
             tokenIdToTokenOwner[tokenId] != address(0),
             "ComposableTopDown: onERC1155BatchReceived tokenId does not exist."
         );
-        mapping(uint256 => uint256) storage ownedErc1155 = erc1155Balances[tokenId][msg.sender];
         uint256 erc1155ContractsLength = erc1155Tokens[tokenId][msg.sender].length();
+        uint256[] memory childReferences = new uint256[](_childTokenIds.length);
+        uint256[] memory balances = new uint256[](_childTokenIds.length);
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
-            uint256 erc1155Balance = ownedErc1155[_childTokenIds[i]];
+            uint256 erc1155Balance = erc1155Balances[tokenId][msg.sender][_childTokenIds[i]];
             if (erc1155Balance == 0) {
                 if (erc1155ContractsLength == 0) {
                     erc1155Contracts[tokenId].add(msg.sender);
@@ -1074,8 +1081,11 @@ contract ComposableTopDown is
                 }
                 erc1155Tokens[tokenId][msg.sender].add(_childTokenIds[i]);
             }
-            ownedErc1155[_childTokenIds[i]] = erc1155Balance + _amounts[i];
+            erc1155Balances[tokenId][msg.sender][_childTokenIds[i]] = erc1155Balance + _amounts[i];
+            childReferences[i] = uint256(keccak256(abi.encodePacked(msg.sender, _childTokenIds[i])));
+            balances[i] = erc1155Balance + _amounts[i];
         }
+        _updateStateHashBatch(tokenId, childReferences, balances);
         emit ReceivedBatchErc1155(_from, tokenId, msg.sender, _childTokenIds, _amounts);
         return ERC1155_RECEIVED_BATCH;
     }
@@ -1086,14 +1096,14 @@ contract ComposableTopDown is
         address _erc1155Contract,
         uint256 _childTokenId,
         uint256 _amount
-    ) private {
+    ) private returns (uint256) {
         if (_amount == 0) {
-            return;
+            return erc1155Balances[_tokenId][_erc1155Contract][_childTokenId];
         }
         uint256 erc1155Balance = erc1155Balances[_tokenId][_erc1155Contract][_childTokenId];
         require(
             erc1155Balance >= _amount,
-            "ComposableTopDown: removeERC20 value not enough"
+            "ComposableTopDown: removeERC1155 value not enough"
         );
         uint256 newERC1155Balance = erc1155Balance - _amount;
         erc1155Balances[_tokenId][_erc1155Contract][_childTokenId] = newERC1155Balance;
@@ -1103,6 +1113,7 @@ contract ComposableTopDown is
             }
             erc1155Tokens[_tokenId][_erc1155Contract].remove(_childTokenId);
         }
+        return newERC1155Balance;
     }
 
     function totalERC1155Contracts(uint256 _tokenId)
@@ -1169,10 +1180,29 @@ contract ComposableTopDown is
      * Update the state hash of tokenId and all its ancestors.
      * @param tokenId token id
      * @param childReference generalization of a child contract adddress
-     * @param value new balance of ERC20, childTokenId of ERC721 or a child's state hash (if childContract==address(this))
+     * @param value new balance of ERC20, childTokenId of ERC721, a child's state hash (if childContract==address(this)), or new balance of ERC1155
      */
     function _updateStateHash(uint256 tokenId, uint256 childReference, uint256 value) private {
         uint256 _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], childReference, value)));
+        tokenIdToStateHash[tokenId] = _newStateHash;
+        while (tokenIdToTokenOwner[tokenId] == address(this)) {
+            tokenId = childTokenOwner[address(this)][tokenId];
+            _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], uint256(uint160(address(this))), _newStateHash)));
+            tokenIdToStateHash[tokenId] = _newStateHash;
+        }
+    }
+
+    /**
+     * Update the state hash of tokenId and all its ancestors.
+     * @param tokenId token id
+     * @param childReferences generalization of a child contract adddress, a list
+     * @param values new balance of ERC20, childTokenId of ERC721, a child's state hash (if childContract==address(this)), or new balance of ERC1155, a list
+     */
+    function _updateStateHashBatch(uint256 tokenId, uint256[] memory childReferences, uint256[] memory values) private {
+        uint256 _newStateHash = tokenIdToStateHash[tokenId];
+        for (uint256 i = 0; i < childReferences.length; ++i) {
+            _newStateHash = uint256(keccak256(abi.encodePacked(_newStateHash, childReferences[i], values[i])));
+        }
         tokenIdToStateHash[tokenId] = _newStateHash;
         while (tokenIdToTokenOwner[tokenId] == address(this)) {
             tokenId = childTokenOwner[address(this)][tokenId];
