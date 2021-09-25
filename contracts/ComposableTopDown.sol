@@ -662,7 +662,11 @@ contract ComposableTopDown is
         if (lastTokenIndex == 0) {
             childContracts[_tokenId].remove(_childContract);
         }
-        _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
+        if (_childContract == address(this)) {
+            _updateStateHash(_tokenId, uint256(uint160(_childContract)), tokenIdToStateHash[_childTokenId]);
+        } else {
+            _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
+        }
     }
 
     function receiveChild(
@@ -686,7 +690,11 @@ contract ComposableTopDown is
         }
         childTokens[_tokenId][_childContract].add(_childTokenId);
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
-        _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
+        if (_childContract == address(this)) {
+            _updateStateHash(_tokenId, uint256(uint160(_childContract)), tokenIdToStateHash[_childTokenId]);
+        } else {
+            _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
+        }
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
     }
 
@@ -1157,6 +1165,12 @@ contract ComposableTopDown is
     // Last State Hash
     ////////////////////////////////////////////////////////
 
+    /**
+     * Update the state hash of tokenId and all its ancestors.
+     * @param tokenId token id
+     * @param childReference generalization of a child contract adddress
+     * @param value new balance of ERC20, childTokenId of ERC721 or a child's state hash (if childContract==address(this))
+     */
     function _updateStateHash(uint256 tokenId, uint256 childReference, uint256 value) private {
         uint256 _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], childReference, value)));
         tokenIdToStateHash[tokenId] = _newStateHash;
@@ -1173,6 +1187,10 @@ contract ComposableTopDown is
         return _stateHash;
     }
 
+    /**
+     * @dev See {safeTransferFrom}.
+     * Check the state hash and call safeTransferFrom.
+     */
     function safeCheckedTransferFrom(
         address from,
         address to,
@@ -1183,6 +1201,10 @@ contract ComposableTopDown is
         safeTransferFrom(from, to, tokenId);
     }
 
+    /**
+     * @dev See {transferFrom}.
+     * Check the state hash and call transferFrom.
+     */
     function checkedTransferFrom(
         address from,
         address to,
@@ -1193,6 +1215,10 @@ contract ComposableTopDown is
         transferFrom(from, to, tokenId);
     }
 
+    /**
+     * @dev See {safeTransferFrom}.
+     * Check the state hash and call safeTransferFrom.
+     */
     function safeCheckedTransferFrom(
         address from,
         address to,
