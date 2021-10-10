@@ -59,8 +59,8 @@ contract ComposableTopDown is
         tokenOwnerToTokenCount[_to]++;
         tokenIdToStateHash[tokenCount] = uint256(keccak256(abi.encodePacked(uint256(uint160(address(this))), tokenCount)));
 
-        require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
         emit Transfer(address(0), _to, tokenCount_);
+        require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
         return tokenCount_;
     }
 
@@ -415,18 +415,18 @@ contract ComposableTopDown is
             _childContract,
             _childTokenId
         );
+        emit TransferChild(
+            _fromTokenId,
+            _toContract,
+            _childContract,
+            _childTokenId
+        );
         IERC998ERC721BottomUp(_childContract).transferToParent(
             address(this),
             _toContract,
             _toTokenId,
             _childTokenId,
             _data
-        );
-        emit TransferChild(
-            _fromTokenId,
-            _toContract,
-            _childContract,
-            _childTokenId
         );
     }
 
