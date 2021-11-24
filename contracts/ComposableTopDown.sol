@@ -59,8 +59,8 @@ contract ComposableTopDown is
         tokenOwnerToTokenCount[_to]++;
         tokenIdToStateHash[tokenCount] = uint256(keccak256(abi.encodePacked(uint256(uint160(address(this))), tokenCount)));
 
-        require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
         emit Transfer(address(0), _to, tokenCount_);
+        require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
         return tokenCount_;
     }
 
@@ -415,18 +415,18 @@ contract ComposableTopDown is
             _childContract,
             _childTokenId
         );
+        emit TransferChild(
+            _fromTokenId,
+            _toContract,
+            _childContract,
+            _childTokenId
+        );
         IERC998ERC721BottomUp(_childContract).transferToParent(
             address(this),
             _toContract,
             _toTokenId,
             _childTokenId,
             _data
-        );
-        emit TransferChild(
-            _fromTokenId,
-            _toContract,
-            _childContract,
-            _childTokenId
         );
     }
 
@@ -645,12 +645,12 @@ contract ComposableTopDown is
         // remove child token
         uint256 lastTokenIndex =
             childTokens[_tokenId][_childContract].length() - 1;
-        childTokens[_tokenId][_childContract].remove(_childTokenId);
+        require(childTokens[_tokenId][_childContract].remove(_childTokenId), "ComposableTopDown: removeChild: _childTokenId not found");
         delete childTokenOwner[_childContract][_childTokenId];
 
         // remove contract
         if (lastTokenIndex == 0) {
-            childContracts[_tokenId].remove(_childContract);
+            require(childContracts[_tokenId].remove(_childContract), "ComposableTopDown: removeChild: _childContract not found");
         }
         if (_childContract == address(this)) {
             _updateStateHash(_tokenId, uint256(uint160(_childContract)), tokenIdToStateHash[_childTokenId]);
@@ -676,9 +676,9 @@ contract ComposableTopDown is
         uint256 childTokensLength =
             childTokens[_tokenId][_childContract].length();
         if (childTokensLength == 0) {
-            childContracts[_tokenId].add(_childContract);
+            require(childContracts[_tokenId].add(_childContract), "ComposableTopDown: receiveChild: add _childContract");
         }
-        childTokens[_tokenId][_childContract].add(_childTokenId);
+        require(childTokens[_tokenId][_childContract].add(_childTokenId), "ComposableTopDown: receiveChild: add _childTokenId");
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
         if (_childContract == address(this)) {
             _updateStateHash(_tokenId, uint256(uint160(_childContract)), tokenIdToStateHash[_childTokenId]);
@@ -763,7 +763,7 @@ contract ComposableTopDown is
             "ComposableTopDown: tokenFallback _data must contain the uint256 tokenId to transfer the token to"
         );
         require(
-            address(msg.sender).isContract(),
+            tx.origin != msg.sender,
             "ComposableTopDown: tokenFallback msg.sender is not a contract"
         );
         uint256 tokenId = _parseTokenId(_data);
@@ -851,7 +851,7 @@ contract ComposableTopDown is
         }
         uint256 erc20Balance = erc20Balances[_tokenId][_erc20Contract];
         if (erc20Balance == 0) {
-            erc20Contracts[_tokenId].add(_erc20Contract);
+            require(erc20Contracts[_tokenId].add(_erc20Contract), "ComposableTopDown: erc20Received: erc20Contracts add _erc20Contract");
         }
         erc20Balances[_tokenId][_erc20Contract] += _value;
         _updateStateHash(_tokenId, uint256(uint160(_erc20Contract)), erc20Balance + _value);
@@ -876,7 +876,7 @@ contract ComposableTopDown is
             uint256 newERC20Balance = erc20Balance - _value;
             erc20Balances[_tokenId][_erc20Contract] = newERC20Balance;
             if (newERC20Balance == 0) {
-                erc20Contracts[_tokenId].remove(_erc20Contract);
+                require(erc20Contracts[_tokenId].remove(_erc20Contract), "ComposableTopDown: removeERC20: erc20Contracts remove _erc20Contract");
             }
             _updateStateHash(_tokenId, uint256(uint160(_erc20Contract)), newERC20Balance);
         }
