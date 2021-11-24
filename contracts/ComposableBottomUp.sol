@@ -24,7 +24,7 @@ contract ComposableBottomUp is
 
     // return this.rootOwnerOf.selector ^ this.rootOwnerOfChild.selector ^
     //   this.tokenOwnerOf.selector ^ this.ownerOfChild.selector;
-    bytes4 constant ERC998_MAGIC_VALUE = 0xcd740db5;
+    bytes32 constant ERC998_MAGIC_VALUE = 0x00000000000000000000000000000000000000000000000000000000cd740db5;
 
     // tokenId => token owner
     mapping(uint256 => TokenOwner) internal tokenIdToTokenOwner;
@@ -252,7 +252,7 @@ contract ComposableBottomUp is
      * This enables the owner of the top-most parent of a tree of composables to call any method on child composables.
      */
     // returns the root owner at the top of the tree of composables
-    function ownerOf(uint256 _tokenId) public view override returns (address) {
+    function ownerOf(uint256 _tokenId) external view override returns (address) {
         address tokenOwner = tokenIdToTokenOwner[_tokenId].tokenOwner;
         require(
             tokenOwner != address(0),
@@ -289,7 +289,7 @@ contract ComposableBottomUp is
     }
 
     function getApproved(uint256 _tokenId)
-        public
+        external
         view
         override
         returns (address)
@@ -623,7 +623,7 @@ contract ComposableBottomUp is
     }
 
     function totalChildTokens(address _parentContract, uint256 _parentTokenId)
-        public
+        external
         view
         override
         returns (uint256)
@@ -635,7 +635,7 @@ contract ComposableBottomUp is
         address _parentContract,
         uint256 _parentTokenId,
         uint256 _index
-    ) public view override returns (uint256) {
+    ) external view override returns (uint256) {
         require(
             parentToChildTokenIds[_parentContract][_parentTokenId].length >
                 _index,
