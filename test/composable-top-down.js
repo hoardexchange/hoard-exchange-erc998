@@ -4,6 +4,7 @@ const { ethers } = require("hardhat");
 describe('ComposableTopDown', async () => {
     let ComposableTopDown,
         SampleERC20,
+        SampleERC1155,
         SampleNFT,
         ContractIERC721ReceiverNew,
         ContractIERC721ReceiverOld;
@@ -29,6 +30,7 @@ describe('ComposableTopDown', async () => {
 
         ComposableTopDown = await ethers.getContractFactory("ComposableTopDown");
         SampleERC20 = await ethers.getContractFactory("SampleERC20");
+        SampleERC1155 = await ethers.getContractFactory("SampleERC1155");
         SampleNFT = await ethers.getContractFactory("SampleNFT");
         ContractIERC721ReceiverNew = await ethers.getContractFactory("ContractIERC721ReceiverNew");
         ContractIERC721ReceiverOld = await ethers.getContractFactory("ContractIERC721ReceiverOld");
@@ -905,6 +907,82 @@ describe('ComposableTopDown', async () => {
             const erc20ComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
             assert(erc20ComposableBalance.eq(composableBalance), 'Invalid ERC20 Composable balance');
         });
+    });
+
+    describe('ERC1155 Transfers', async () => {
+        const uri = 'https://token-cdn-domain/\\{id\\}.json';
+
+        beforeEach(async () => {
+            sampleERC1155Instance = await SampleERC1155.deploy(uri);
+
+            // mint
+            await sampleERC1155Instance.mint(alice.address, 1, 10);
+            await sampleERC1155Instance.mint(alice.address, 2, 10);
+            await sampleERC1155Instance.mint(alice.address, 3, 10);
+
+            await composableTopDownInstance.safeMint(alice.address);
+
+            sampleERC1155InstanceAlice = sampleERC1155Instance.connect(alice);
+        });
+
+        function arrayEq(a, b) {
+            if (a.length != b.length) {
+                return false;
+            }
+            for (i = 0 ; i < a.length ; i ++) {
+                if (! a[i].eq(b[i])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        it('Should transfer single', async () => {
+            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 1, 1, bytesFirstToken);
+            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(1), 'Invalid single token balance (1)');
+            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 1, 5, bytesFirstToken);
+            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(6), 'Invalid single token balance (2)');
+            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 1, 4, bytesFirstToken);
+            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(2), 'Invalid single token balance (3)');
+        });
+
+        it('Should transfer multiple', async () => {
+            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 1, 3, bytesFirstToken);
+            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 2, 6, bytesFirstToken);
+            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 3, 9, bytesFirstToken);
+            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 1, 1, bytesFirstToken);
+            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 2, 2, bytesFirstToken);
+            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 3, 3, bytesFirstToken);
+            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(2), 'Invalid multiple token balance (1)');
+            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 2)).eq(4), 'Invalid multiple token balance (2)');
+            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 3)).eq(6), 'Invalid multiple token balance (3)');
+            assert(arrayEq(await composableTopDownInstance.balanceOfBatchERC1155([1, 1, 1], sampleERC1155Instance.address, [1, 2, 3]), [2, 4, 6]), 'Invalid multiple token balance (4)');
+        });
+
+        it('Should transfer batch', async () => {
+            await sampleERC1155InstanceAlice.safeBatchTransferFrom(alice.address, composableTopDownInstance.address, [1, 2, 3], [3, 6, 9], bytesFirstToken);
+            await composableTopDownInstance.safeBatchTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, [1, 2, 3], [1, 2, 3], bytesFirstToken);
+            assert(arrayEq(await composableTopDownInstance.balanceOfBatchERC1155([1, 1, 1], sampleERC1155Instance.address, [1, 2, 3]), [2, 4, 6]), 'Invalid multiple token balance (4)');
+        });
+
+        it('Should iterate', async () => {
+            await sampleERC1155InstanceAlice.safeBatchTransferFrom(alice.address, composableTopDownInstance.address, [1, 2, 3], [3, 6, 9], bytesFirstToken);
+            let totalContracts = await composableTopDownInstance.totalERC1155Contracts(1);
+            assert(totalContracts.eq(1), 'Invalid number of contracts');
+            for (i = 0 ; i < totalContracts.toNumber() ; i ++) {
+                let contract = composableTopDownInstance.erc1155ContractByIndex(1, i);
+                let totalChildTokens = await composableTopDownInstance.totalERC1155Tokens(1, contract);
+                assert(totalChildTokens.eq(3), 'Invalid number of child tokens');
+                let childTokens = [];
+                for (j = 0 ; j < totalChildTokens.toNumber() ; j ++) {
+                    let childToken = await composableTopDownInstance.erc1155TokenByIndex(1, contract, j);
+                    childTokens.push(childToken);
+                }
+                assert(arrayEq(childTokens, [1, 2, 3]), 'Invalid child tokens');
+            }
+        });
+
+
     });
 
     describe('Multi Token tests', async () => {
