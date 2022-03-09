@@ -19,7 +19,7 @@ contract SampleNFT is ERC721 {
     //old version
     bytes4 constant ERC721_RECEIVED_OLD = 0xf0b9e5ba;
 
-    constructor() public ERC721("Sample NFT", "NFT") {}
+    constructor() ERC721("Sample NFT", "NFT") {}
 
     /// wrapper on minting new 721
     function mint721(address _to, string memory _hash)

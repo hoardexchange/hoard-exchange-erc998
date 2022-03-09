@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 
-pragma solidity ^0.8.0;
+pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -18,6 +18,7 @@ import "./interfaces/IERC998ERC721TopDown.sol";
 import "./interfaces/IERC998ERC721TopDownEnumerable.sol";
 import "./interfaces/IERC998ERC1155TopDown.sol";
 import "./interfaces/IERC998ERC1155TopDownEnumerable.sol";
+import "./interfaces/StateHash.sol";
 
 contract ComposableTopDown is
     ERC165,
@@ -28,7 +29,8 @@ contract ComposableTopDown is
     IERC998ERC20TopDownEnumerable,
     IERC998ERC1155TopDown,
     IERC998ERC1155TopDownEnumerable,
-    IERC1155Receiver
+    IERC1155Receiver,
+    StateHash
 {
     using Address for address;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -64,7 +66,7 @@ contract ComposableTopDown is
         uint256 tokenCount_ = tokenCount;
         tokenIdToTokenOwner[tokenCount_] = _to;
         tokenOwnerToTokenCount[_to]++;
-        tokenIdToStateHash[tokenCount] = uint256(keccak256(abi.encodePacked(uint256(uint160(address(this))), tokenCount)));
+        tokenIdToStateHash[tokenCount] = uint256(keccak256(abi.encodePacked(address(this), tokenCount)));
 
         emit Transfer(address(0), _to, tokenCount_);
         require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "ComposableTopDown: transfer to non ERC721Receiver implementer");
@@ -368,12 +370,12 @@ contract ComposableTopDown is
         uint256 _childTokenId
     ) external override {
         _transferChild(_fromTokenId, _to, _childContract, _childTokenId);
+        emit TransferChild(_fromTokenId, _to, _childContract, _childTokenId);
         IERC721(_childContract).safeTransferFrom(
             address(this),
             _to,
             _childTokenId
         );
-        emit TransferChild(_fromTokenId, _to, _childContract, _childTokenId);
     }
 
     function safeTransferChild(
@@ -384,13 +386,13 @@ contract ComposableTopDown is
         bytes memory _data
     ) external override {
         _transferChild(_fromTokenId, _to, _childContract, _childTokenId);
+        emit TransferChild(_fromTokenId, _to, _childContract, _childTokenId);
         IERC721(_childContract).safeTransferFrom(
             address(this),
             _to,
             _childTokenId,
             _data
         );
-        emit TransferChild(_fromTokenId, _to, _childContract, _childTokenId);
     }
 
     function transferChild(
@@ -400,15 +402,16 @@ contract ComposableTopDown is
         uint256 _childTokenId
     ) external override {
         _transferChild(_fromTokenId, _to, _childContract, _childTokenId);
+        emit TransferChild(_fromTokenId, _to, _childContract, _childTokenId);
         //this is here to be compatible with cryptokitties and other old contracts that require being owner and approved
         // before transferring.
         //does not work with current standard which does not allow approving self, so we must let it fail in that case.
         bytes memory callData =
             abi.encodeWithSelector(APPROVE, this, _childTokenId);
+        // solhint-disable-next-line avoid-low-level-calls
         _childContract.call(callData);
 
         IERC721(_childContract).transferFrom(address(this), _to, _childTokenId);
-        emit TransferChild(_fromTokenId, _to, _childContract, _childTokenId);
     }
 
     function transferChildToParent(
@@ -662,10 +665,14 @@ contract ComposableTopDown is
         if (lastTokenIndex == 0) {
             require(childContracts[_tokenId].remove(_childContract), "ComposableTopDown: removeChild: _childContract not found");
         }
+        uint256 rootId = _localRootId(_tokenId);
         if (_childContract == address(this)) {
-            _updateStateHash(_tokenId, uint256(uint160(_childContract)), tokenIdToStateHash[_childTokenId]);
+            uint256 rootStateHash = tokenIdToStateHash[rootId];
+            uint256 childStateHash = tokenIdToStateHash[_childTokenId];
+            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(rootStateHash, _tokenId, _childContract, childStateHash)));
+            tokenIdToStateHash[_childTokenId] = uint256(keccak256(abi.encodePacked(rootStateHash, _childTokenId, _childContract, childStateHash)));
         } else {
-            _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
+            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, _childTokenId)));
         }
     }
 
@@ -690,10 +697,11 @@ contract ComposableTopDown is
         }
         require(childTokens[_tokenId][_childContract].add(_childTokenId), "ComposableTopDown: receiveChild: add _childTokenId");
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
+        uint256 rootId = _localRootId(_tokenId);
         if (_childContract == address(this)) {
-            _updateStateHash(_tokenId, uint256(uint160(_childContract)), tokenIdToStateHash[_childTokenId]);
+            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, tokenIdToStateHash[_childTokenId])));
         } else {
-            _updateStateHash(_tokenId, uint256(uint160(_childContract)), _childTokenId);
+            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, _childTokenId)));
         }
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
     }
@@ -726,12 +734,11 @@ contract ComposableTopDown is
                 msg.sender,
             "ComposableTopDown: transferERC20 msg.sender not eligible"
         );
-        removeERC20(_tokenId, _erc20Contract, _value);
+        removeERC20(_tokenId, _to, _erc20Contract, _value);
         require(
             IERC20AndERC223(_erc20Contract).transfer(_to, _value),
             "ComposableTopDown: transferERC20 transfer failed"
         );
-        emit TransferERC20(_tokenId, _to, _erc20Contract, _value);
     }
 
     // implementation of ERC 223
@@ -754,12 +761,11 @@ contract ComposableTopDown is
                 msg.sender,
             "ComposableTopDown: transferERC223 msg.sender not eligible"
         );
-        removeERC20(_tokenId, _erc223Contract, _value);
+        removeERC20(_tokenId, _to, _erc223Contract, _value);
         require(
             IERC20AndERC223(_erc223Contract).transfer(_to, _value, _data),
             "ComposableTopDown: transferERC223 transfer failed"
         );
-        emit TransferERC20(_tokenId, _to, _erc223Contract, _value);
     }
 
     // used by ERC 223
@@ -864,12 +870,14 @@ contract ComposableTopDown is
             require(erc20Contracts[_tokenId].add(_erc20Contract), "ComposableTopDown: erc20Received: erc20Contracts add _erc20Contract");
         }
         erc20Balances[_tokenId][_erc20Contract] += _value;
-        _updateStateHash(_tokenId, uint256(uint160(_erc20Contract)), erc20Balance + _value);
+        uint256 rootId = _localRootId(_tokenId);
+        tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _erc20Contract, erc20Balance + _value)));
         emit ReceivedERC20(_from, _tokenId, _erc20Contract, _value);
     }
 
     function removeERC20(
         uint256 _tokenId,
+        address _to,
         address _erc20Contract,
         uint256 _value
     ) private {
@@ -888,8 +896,10 @@ contract ComposableTopDown is
             if (newERC20Balance == 0) {
                 require(erc20Contracts[_tokenId].remove(_erc20Contract), "ComposableTopDown: removeERC20: erc20Contracts remove _erc20Contract");
             }
-            _updateStateHash(_tokenId, uint256(uint160(_erc20Contract)), newERC20Balance);
+            uint256 rootId = _localRootId(_tokenId);
+            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _erc20Contract, newERC20Balance)));
         }
+        emit TransferERC20(_tokenId, _to, _erc20Contract, _value);
     }
 
 
@@ -933,9 +943,10 @@ contract ComposableTopDown is
             "ComposableTopDown: transferERC223 msg.sender not eligible"
         );
         uint256 newBalance = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenId, _amount);
-        _updateStateHash(_fromTokenId, uint256(keccak256(abi.encodePacked(_erc1155Contract, _childTokenId))), newBalance);
-        IERC1155(_erc1155Contract).safeTransferFrom(address(this), _to, _childTokenId, _amount, _data);
+        uint256 rootId = _localRootId(_fromTokenId);
+        tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _fromTokenId, _erc1155Contract, _childTokenId, newBalance)));
         emit TransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenId, _amount);
+        IERC1155(_erc1155Contract).safeTransferFrom(address(this), _to, _childTokenId, _amount, _data);
     }
 
 
@@ -966,15 +977,15 @@ contract ComposableTopDown is
                 msg.sender,
             "ComposableTopDown: transferERC223 msg.sender not eligible"
         );
-        uint256[] memory childReferences = new uint256[](_childTokenIds.length);
-        uint256[] memory balances = new uint256[](_childTokenIds.length);
+        uint256 rootId = _localRootId(_fromTokenId);
+        uint256 _newStateHash = tokenIdToStateHash[rootId];
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
-            balances[i] = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenIds[i], _amounts[i]);
-            childReferences[i] = uint256(keccak256(abi.encodePacked(_erc1155Contract, _childTokenIds[i])));
+            uint256 _newBalance = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenIds[i], _amounts[i]);
+            _newStateHash = uint256(keccak256(abi.encodePacked(_newStateHash, _fromTokenId, _erc1155Contract, _childTokenIds[i], _newBalance)));
         }
-        _updateStateHashBatch(_fromTokenId, childReferences, balances);
-        IERC1155(_erc1155Contract).safeBatchTransferFrom(address(this), _to, _childTokenIds, _amounts, _data);
+        tokenIdToStateHash[rootId] = _newStateHash;
         emit BatchTransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenIds, _amounts);
+        IERC1155(_erc1155Contract).safeBatchTransferFrom(address(this), _to, _childTokenIds, _amounts, _data);
     }
 
     /**
@@ -1039,7 +1050,8 @@ contract ComposableTopDown is
             erc1155Tokens[tokenId][msg.sender].add(_childTokenId);
         }
         erc1155Balances[tokenId][msg.sender][_childTokenId] = erc1155Balance + _amount;
-        _updateStateHash(tokenId, uint256(keccak256(abi.encodePacked(msg.sender, _childTokenId))), erc1155Balance + _amount);
+        uint256 rootId = _localRootId(tokenId);
+        tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], tokenId, msg.sender, _childTokenId, erc1155Balance + _amount)));
         emit ReceivedErc1155(_from, tokenId, msg.sender, _childTokenId, _amount);
         return ERC1155_RECEIVED_SINGLE;
     }
@@ -1070,8 +1082,8 @@ contract ComposableTopDown is
             "ComposableTopDown: onERC1155BatchReceived tokenId does not exist."
         );
         uint256 erc1155ContractsLength = erc1155Tokens[tokenId][msg.sender].length();
-        uint256[] memory childReferences = new uint256[](_childTokenIds.length);
-        uint256[] memory balances = new uint256[](_childTokenIds.length);
+        uint256 rootId = _localRootId(tokenId);
+        uint256 _newStateHash = tokenIdToStateHash[rootId];
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
             uint256 erc1155Balance = erc1155Balances[tokenId][msg.sender][_childTokenIds[i]];
             if (erc1155Balance == 0) {
@@ -1082,10 +1094,9 @@ contract ComposableTopDown is
                 erc1155Tokens[tokenId][msg.sender].add(_childTokenIds[i]);
             }
             erc1155Balances[tokenId][msg.sender][_childTokenIds[i]] = erc1155Balance + _amounts[i];
-            childReferences[i] = uint256(keccak256(abi.encodePacked(msg.sender, _childTokenIds[i])));
-            balances[i] = erc1155Balance + _amounts[i];
+            _newStateHash = uint256(keccak256(abi.encodePacked(_newStateHash, tokenId, msg.sender, _childTokenIds[i], erc1155Balance + _amounts[i])));
         }
-        _updateStateHashBatch(tokenId, childReferences, balances);
+        tokenIdToStateHash[rootId] = _newStateHash;
         emit ReceivedBatchErc1155(_from, tokenId, msg.sender, _childTokenIds, _amounts);
         return ERC1155_RECEIVED_BATCH;
     }
@@ -1169,6 +1180,7 @@ contract ComposableTopDown is
             || interfaceId == type(IERC998ERC20TopDown).interfaceId
             || interfaceId == type(IERC998ERC20TopDownEnumerable).interfaceId
             || interfaceId == 0x1bc995e4
+            || interfaceId == type(StateHash).interfaceId
             || super.supportsInterface(interfaceId);
     }
 
@@ -1177,41 +1189,16 @@ contract ComposableTopDown is
     ////////////////////////////////////////////////////////
 
     /**
-     * Update the state hash of tokenId and all its ancestors.
-     * @param tokenId token id
-     * @param childReference generalization of a child contract adddress
-     * @param value new balance of ERC20, childTokenId of ERC721, a child's state hash (if childContract==address(this)), or new balance of ERC1155
+     * @dev Returns tokenId of the root bundle. Local means that it does not traverse through foreign ERC998 contracts.
      */
-    function _updateStateHash(uint256 tokenId, uint256 childReference, uint256 value) private {
-        uint256 _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], childReference, value)));
-        tokenIdToStateHash[tokenId] = _newStateHash;
+    function _localRootId(uint256 tokenId) private view returns (uint256) {
         while (tokenIdToTokenOwner[tokenId] == address(this)) {
             tokenId = childTokenOwner[address(this)][tokenId];
-            _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], uint256(uint160(address(this))), _newStateHash)));
-            tokenIdToStateHash[tokenId] = _newStateHash;
         }
+        return tokenId;
     }
 
-    /**
-     * Update the state hash of tokenId and all its ancestors.
-     * @param tokenId token id
-     * @param childReferences generalization of a child contract adddress, a list
-     * @param values new balance of ERC20, childTokenId of ERC721, a child's state hash (if childContract==address(this)), or new balance of ERC1155, a list
-     */
-    function _updateStateHashBatch(uint256 tokenId, uint256[] memory childReferences, uint256[] memory values) private {
-        uint256 _newStateHash = tokenIdToStateHash[tokenId];
-        for (uint256 i = 0; i < childReferences.length; ++i) {
-            _newStateHash = uint256(keccak256(abi.encodePacked(_newStateHash, childReferences[i], values[i])));
-        }
-        tokenIdToStateHash[tokenId] = _newStateHash;
-        while (tokenIdToTokenOwner[tokenId] == address(this)) {
-            tokenId = childTokenOwner[address(this)][tokenId];
-            _newStateHash = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[tokenId], uint256(uint160(address(this))), _newStateHash)));
-            tokenIdToStateHash[tokenId] = _newStateHash;
-        }
-    }
-
-    function stateHash(uint256 tokenId) public view returns (uint256) {
+    function stateHash(uint256 tokenId) external view override returns (uint256) {
         uint256 _stateHash = tokenIdToStateHash[tokenId];
         require(_stateHash > 0, "ComposableTopDown: stateHash of _tokenId is zero");
         return _stateHash;

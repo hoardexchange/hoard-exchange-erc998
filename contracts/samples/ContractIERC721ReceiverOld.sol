@@ -15,7 +15,7 @@ contract ContractIERC721ReceiverOld is ERC721, IERC721Receiver {
 
     uint256 data = 1;
 
-    constructor() public ERC721("NFT_OLD_RECEIVER", "NOR") {}
+    constructor() ERC721("NFT_OLD_RECEIVER", "NOR") {}
 
     function mint721(address _to) public returns (uint256) {
         _tokenIds.increment();

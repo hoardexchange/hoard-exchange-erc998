@@ -11,7 +11,6 @@ contract SampleERC20 is ERC20 {
     using Address for address;
 
     constructor(string memory tokenName, string memory tokenSymbol)
-        public
         ERC20(tokenName, tokenSymbol)
     {}
 
