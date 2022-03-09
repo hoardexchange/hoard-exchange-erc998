@@ -9,7 +9,6 @@ contract SampleERC1155 is ERC1155 {
     using Address for address;
 
     constructor(string memory uri_)
-        public
         ERC1155(uri_)
     {}
 
