@@ -35,7 +35,7 @@ describe('ComposableTopDown', async () => {
         ContractIERC721ReceiverNew = await ethers.getContractFactory("ContractIERC721ReceiverNew");
         ContractIERC721ReceiverOld = await ethers.getContractFactory("ContractIERC721ReceiverOld");
 
-        composableTopDownInstance = await ComposableTopDown.deploy();
+        composableTopDownInstance = await ComposableTopDown.deploy("ComposableTopDown", "CTD");
         await composableTopDownInstance.deployed();
     });
 
@@ -51,7 +51,7 @@ describe('ComposableTopDown', async () => {
         });
 
         it('Should revert when trying to get balanceOf zero address', async () => {
-            const expectedRevertMessage = 'ComposableTopDown: balanceOf _tokenOwner zero address';
+            const expectedRevertMessage = 'CTD: balanceOf _tokenOwner zero address';
             await expect(composableTopDownInstance.balanceOf(zeroAddress)).to.be.revertedWith(expectedRevertMessage);
         });
 
@@ -117,7 +117,7 @@ describe('ComposableTopDown', async () => {
         it('Should revert when trying to receive an erc721 with no data', async () => {
             const erc721Instance = await ContractIERC721ReceiverOld.deploy();
             await erc721Instance.mint721(alice.address);
-            const expectedRevertMessage = 'ComposableTopDown: onERC721Received(4) _data must contain the uint256 tokenId to transfer the child token to';
+            const expectedRevertMessage = 'CTD: onERC721Received(4) empty _data';
 
             await expect(erc721Instance.connect(alice)['safeTransferFrom(address,address,uint256)'](
                 alice.address,
@@ -129,10 +129,10 @@ describe('ComposableTopDown', async () => {
         it('Should return the magic value ', async () => {
             await safeTransferFromFirstToken();
             let aliceOwner = await composableTopDownInstance.rootOwnerOf(firstChildTokenId);
-            assert(aliceOwner.startsWith(ERC998_MAGIC_VALUE), 'ComposableTopDown: the magic value was not returned by rootOwnerOfChild (1)');
-            assert(aliceOwner.endsWith(alice.address.toLowerCase().substring(2)), 'ComposableTopDown: rootOwnerOfChild: alice should be the owner');
+            assert(aliceOwner.startsWith(ERC998_MAGIC_VALUE), 'CTD: the magic value was not returned by rootOwnerOfChild (1)');
+            assert(aliceOwner.endsWith(alice.address.toLowerCase().substring(2)), 'CTD: rootOwnerOfChild: alice should be the owner');
 
-            const expectedRevertMessage = 'ComposableTopDown: ownerOf _tokenId zero address';
+            const expectedRevertMessage = 'CTD: ownerOf _tokenId zero address';
             await expect(composableTopDownInstance.rootOwnerOf(112233)).to.be.revertedWith(expectedRevertMessage);
         });
 
@@ -142,7 +142,7 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should revert when trying to approve with not owner', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: approve msg.sender not owner';
+                const expectedRevertMessage = 'CTD: approve msg.sender not owner';
 
                 await expect(composableTopDownInstance.connect(bob).approve(bob.address, expectedTokenId)).to.be.revertedWith(expectedRevertMessage);
             });
@@ -185,7 +185,7 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should revert when trying to setApprovalForAll zero address', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: setApprovalForAll _operator zero address';
+                const expectedRevertMessage = 'CTD: setApprovalForAll _operator zero address';
                 await expect(composableTopDownInstance.setApprovalForAll(zeroAddress, true)).to.be.revertedWith(expectedRevertMessage);
             });
 
@@ -229,19 +229,19 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should revert isApprovedForAll _owner zero address', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: isApprovedForAll _owner zero address';
+                const expectedRevertMessage = 'CTD: isApprovedForAll _owner zero address';
                 await expect(composableTopDownInstance.isApprovedForAll(zeroAddress, bob.address)).to.be.revertedWith(expectedRevertMessage);
             });
 
             it('Should revert isApprovedForAll _operator zero address', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: isApprovedForAll _operator zero address';
+                const expectedRevertMessage = 'CTD: isApprovedForAll _operator zero address';
                 await expect(composableTopDownInstance.isApprovedForAll(alice.address, zeroAddress)).to.be.revertedWith(expectedRevertMessage);
             });
         });
 
         describe('Composable getChild', async () => {
             it('Should revert when trying to get unapproved', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: getChild msg.sender not approved';
+                const expectedRevertMessage = 'CTD: getChild msg.sender not approved';
 
                 await expect(
                     composableTopDownInstance.connect(bob)
@@ -361,22 +361,22 @@ describe('ComposableTopDown', async () => {
             });
 
             it('Should revert when trying to transfer unapproved', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: _transferFrom msg.sender not approved';
+                const expectedRevertMessage = 'CTD: _transferFrom msg.sender not approved';
                 await expect(composableTopDownInstance.connect(bob).transferFrom(alice.address, bob.address, expectedTokenId)).to.be.revertedWith(expectedRevertMessage);
             });
 
             it('Should revert when trying to transfer from zero address', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: _transferFrom _from zero address';
+                const expectedRevertMessage = 'CTD: _transferFrom _from zero address';
                 await expect(composableTopDownInstance.transferFrom(zeroAddress, bob.address, expectedTokenId)).to.be.revertedWith(expectedRevertMessage);
             });
 
             it('Should revert when trying to transfer from not owner', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: _transferFrom _from not owner';
+                const expectedRevertMessage = 'CTD: _transferFrom _from not owner';
                 await expect(composableTopDownInstance.transferFrom(nonUsed.address, bob.address, expectedTokenId)).to.be.revertedWith(expectedRevertMessage);
             });
 
             it('Should revert when trying to transfer to zero address', async () => {
-                const expectedRevertMessage = 'ComposableTopDown: _transferFrom _to zero address';
+                const expectedRevertMessage = 'CTD: _transferFrom _to zero address';
                 await expect(composableTopDownInstance.transferFrom(alice.address, zeroAddress, expectedTokenId)).to.be.revertedWith(expectedRevertMessage);
             });
 
@@ -456,7 +456,7 @@ describe('ComposableTopDown', async () => {
             it('Should revert when trying to safeTransferFrom(4) to a contract with != ERC721_RECEIVED_OLD', async () => {
                 // given:
                 const contractIERC721ReceiverNewInstance = await ContractIERC721ReceiverNew.deploy();
-                const expectedRevertMessage = 'ComposableTopDown: safeTransferFrom(4) onERC721Received invalid return value';
+                const expectedRevertMessage = 'CTD: safeTransferFrom(4) onERC721Received invalid return value';
 
                 // then:
                 await expect(composableTopDownInstance
@@ -860,7 +860,7 @@ describe('ComposableTopDown', async () => {
         });
 
         it('Should revert getERC20 with invalid contract address', async () => {
-            const expectedRevertMessage = 'ComposableTopDown: getERC20 allowance failed';
+            const expectedRevertMessage = 'CTD: getERC20 allowance failed';
             await expect(
                 composableTopDownInstance
                     .connect(bob)
@@ -873,7 +873,7 @@ describe('ComposableTopDown', async () => {
         });
 
         it('Should revert getERC20 allowed address not enough amount', async () => {
-            const expectedRevertMessage = 'ComposableTopDown: getERC20 value greater than remaining';
+            const expectedRevertMessage = 'CTD: getERC20 value greater than remaining';
             // when:
             await expect(
                 composableTopDownInstance
@@ -1147,7 +1147,7 @@ describe('ComposableTopDown', async () => {
 
     describe('Between ComposableTopDowns / Gas Usages', async () => {
         beforeEach(async () => {
-            secondComposableTopDownInstance = await ComposableTopDown.deploy();
+            secondComposableTopDownInstance = await ComposableTopDown.deploy("ComposableTopDown2", "CTD2");
 
             await composableTopDownInstance.safeMint(alice.address);
             await secondComposableTopDownInstance.safeMint(bob.address);
@@ -1221,7 +1221,7 @@ describe('ComposableTopDown', async () => {
                 const firstComposableChildExists = await composableTopDownInstance.childExists(sampleNFTInstance.address, firstChildTokenId);
                 assert(!firstComposableChildExists, 'First Composable Child exists');
 
-                await expect(composableTopDownInstance.ownerOfChild(sampleNFTInstance.address, firstChildTokenId)).to.be.revertedWith('ComposableTopDown: ownerOfChild not found');
+                await expect(composableTopDownInstance.ownerOfChild(sampleNFTInstance.address, firstChildTokenId)).to.be.revertedWith('CTD: ownerOfChild not found');
 
                 await expect(composableTopDownInstance.childContractByIndex(expectedTokenId, 0)).to.be.revertedWith('EnumerableSet: index out of bounds');
 
@@ -1421,16 +1421,16 @@ describe('ComposableTopDown', async () => {
             // Accounts can have characters, characters can have weapons, weapons can have enchantments
 
             // Create alice and bob accounts
-            erc998Accounts = await ComposableTopDown.connect(owner).deploy();
+            erc998Accounts = await ComposableTopDown.connect(owner).deploy("ComposableTopDownA", "CTDA");
             await erc998Accounts.safeMint(alice.address);
             await erc998Accounts.safeMint(bob.address);
 
             // Create two characters
-            erc998Characters = await ComposableTopDown.connect(owner).deploy();
+            erc998Characters = await ComposableTopDown.connect(owner).deploy("ComposableTopDownC", "CTDC");
             await erc998Characters.safeMint(owner.address); // first character
             await erc998Characters.safeMint(owner.address); // second character
 
-            erc998Weapons = await ComposableTopDown.connect(owner).deploy();
+            erc998Weapons = await ComposableTopDown.connect(owner).deploy("ComposableTopDownW", "CTDW");
             await erc998Weapons.safeMint(owner.address); // id 1
             await erc998Weapons.safeMint(owner.address); // id 2
             await erc998Weapons.safeMint(owner.address); // id 3
@@ -1796,6 +1796,106 @@ describe('ComposableTopDown', async () => {
             assert(stateHash34.eq(stateHash33), "Wrong state hash for tokenId 6,");
 
         });
+    });
+
+    describe('Ownable', async () => {
+        it('Should be deployer initially', async () => {
+            let owner = await composableTopDownInstance.owner()
+            assert(owner == composableTopDownInstance.signer.address, "Wrong owner")
+        });
+
+        it('Should transfer ownership', async () => {
+            let tx = await composableTopDownInstance.transferOwnership(bob.address)
+            await tx.wait()
+            let owner = await composableTopDownInstance.owner()
+            assert(owner == bob.address, "Wrong owner")
+        });
+
+        it('Should not transfer ownership', async () => {
+            const expectedRevertMessage = 'Ownable: caller is not the owner';
+            await expect(composableTopDownInstance.connect(bob).transferOwnership(bob.address)).to.be.revertedWith(expectedRevertMessage);
+        });
+
+        it('Should successfully emit OwnershipTransferred event arguments', async () => {
+            await expect(
+                composableTopDownInstance.transferOwnership(bob.address))
+                .to.emit(composableTopDownInstance,
+                    'OwnershipTransferred').withArgs(
+                        alice.address,
+                        bob.address
+                    );
+        });
+
+        it('Should renounce ownership', async () => {
+            let tx = await composableTopDownInstance.renounceOwnership()
+            await tx.wait()
+            let owner = await composableTopDownInstance.owner()
+            assert(owner == zeroAddress, "Wrong owner")
+        });
+
+        it('Should not renounce ownership', async () => {
+            const expectedRevertMessage = 'Ownable: caller is not the owner';
+            await expect(composableTopDownInstance.connect(bob).renounceOwnership()).to.be.revertedWith(expectedRevertMessage);
+        });
+    });
+
+    describe('BaseURI', async () => {
+        it('Should set base uri', async () => {
+            const baseURI = "https://my.token.io/"
+            let tx = await composableTopDownInstance.setBaseURI(baseURI)
+            await tx.wait()
+            let baseURI_ = await composableTopDownInstance.baseURI()
+            assert(baseURI == baseURI_, "Wrong base uri")
+        });
+
+        it('Should successfully emit OwnershipTransferred event arguments', async () => {
+            const baseURI = "https://my.token.io/"
+            await expect(
+                composableTopDownInstance.setBaseURI(baseURI))
+                .to.emit(composableTopDownInstance,
+                    'NewBaseURI').withArgs(
+                        baseURI
+                    );
+        });
+
+        it('Should not set base uri', async () => {
+            const baseURI = "https://my.token.io/"
+            const expectedRevertMessage = 'Ownable: caller is not the owner';
+            await expect(composableTopDownInstance.connect(bob).setBaseURI(baseURI)).to.be.revertedWith(expectedRevertMessage);
+        });
+
+        it('Should get token uri', async () => {
+            const baseURI = "https://my.token.io/"
+            let tx = await composableTopDownInstance.setBaseURI(baseURI)
+            await tx.wait()
+            tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
+            tx = await tx.wait();
+            let tokenURI = await composableTopDownInstance.tokenURI(1)
+            assert(tokenURI == baseURI+"1.json", "Wrong token uri")
+        });
+
+        it('Should not get token uri for non existing token', async () => {
+            const baseURI = "https://my.token.io/"
+            let tx = await composableTopDownInstance.setBaseURI(baseURI)
+            await tx.wait()
+            tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
+            tx = await tx.wait();
+            const expectedRevertMessage = 'CTD: URI does not exist';
+            await expect(composableTopDownInstance.tokenURI(2)).to.be.revertedWith(expectedRevertMessage);
+        });
+
+        it('Should change base uri', async () => {
+            const baseURI = "https://my.token.io/"
+            let tx = await composableTopDownInstance.setBaseURI(baseURI)
+            await tx.wait()
+            tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
+            tx = await tx.wait();
+            tx = await composableTopDownInstance.setBaseURI(baseURI+"asset/")
+            await tx.wait()
+            let tokenURI = await composableTopDownInstance.tokenURI(1)
+            assert(tokenURI == baseURI+"asset/"+"1.json", "Wrong token uri")
+        });
+
     });
 
     async function setUpTestTokens(nftCount, erc20Count) {
