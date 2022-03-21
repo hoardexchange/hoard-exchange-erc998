@@ -82,7 +82,7 @@ contract ComposableTopDown is
         symbol = symbol_;
     }
 
-    function safeMint(address _to) public returns (uint256) {
+    function safeMint(address _to) external virtual returns (uint256) {
         require(_to != address(0), "CTD: _to zero address");
         tokenCount++;
         uint256 tokenCount_ = tokenCount;
@@ -210,6 +210,7 @@ contract ComposableTopDown is
         external
         view
         override
+        virtual
         returns (uint256)
     {
         require(
@@ -219,7 +220,7 @@ contract ComposableTopDown is
         return tokenOwnerToTokenCount[_tokenOwner];
     }
 
-    function approve(address _approved, uint256 _tokenId) external override {
+    function approve(address _approved, uint256 _tokenId) external override virtual {
         address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         require(
             rootOwner == msg.sender ||
@@ -234,6 +235,7 @@ contract ComposableTopDown is
         public
         view
         override
+        virtual
         returns (address)
     {
         address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
@@ -243,6 +245,7 @@ contract ComposableTopDown is
     function setApprovalForAll(address _operator, bool _approved)
         external
         override
+        virtual
     {
         require(
             _operator != address(0),
@@ -256,6 +259,7 @@ contract ComposableTopDown is
         external
         view
         override
+        virtual
         returns (bool)
     {
         require(
@@ -273,7 +277,7 @@ contract ComposableTopDown is
         address _from,
         address _to,
         uint256 _tokenId
-    ) public override {
+    ) public override virtual {
         _transferFrom(_from, _to, _tokenId);
     }
 
@@ -281,7 +285,7 @@ contract ComposableTopDown is
         address _from,
         address _to,
         uint256 _tokenId
-    ) public override {
+    ) public override virtual {
         _transferFrom(_from, _to, _tokenId);
         if (_to.isContract()) {
             bytes4 retval =
@@ -303,7 +307,7 @@ contract ComposableTopDown is
         address _to,
         uint256 _tokenId,
         bytes memory _data
-    ) public override {
+    ) public override virtual {
         _transferFrom(_from, _to, _tokenId);
         if (_to.isContract()) {
             bytes4 retval =
@@ -325,7 +329,7 @@ contract ComposableTopDown is
         address _from,
         address _to,
         uint256 _tokenId
-    ) private {
+    ) internal {
         require(
             _from != address(0),
             "CTD: _transferFrom _from zero address"
@@ -612,7 +616,7 @@ contract ComposableTopDown is
         address _to,
         address _childContract,
         uint256 _childTokenId
-    ) private {
+    ) internal {
         uint256 tokenId = childTokenOwner[_childContract][_childTokenId];
         require(
             tokenId != 0,
@@ -638,7 +642,7 @@ contract ComposableTopDown is
     }
 
     function _ownerOfChild(address _childContract, uint256 _childTokenId)
-        private
+        internal
         view
         returns (address parentTokenOwner, uint256 parentTokenId)
     {
@@ -651,7 +655,7 @@ contract ComposableTopDown is
     }
 
     function _parseTokenId(bytes memory _data)
-        private
+        internal
         pure
         returns (uint256 tokenId)
     {
@@ -665,7 +669,7 @@ contract ComposableTopDown is
     }
 
     function _checkOnERC721Received(address from, address to, uint256 tokenId, bytes memory _data)
-        private returns (bool)
+        internal returns (bool)
     {
         if (to.isContract()) {
             try IERC721Receiver(to).onERC721Received(msg.sender, from, tokenId, _data) returns (bytes4 retval) {
@@ -689,7 +693,7 @@ contract ComposableTopDown is
         uint256 _tokenId,
         address _childContract,
         uint256 _childTokenId
-    ) private {
+    ) internal {
         // remove child token
         uint256 lastTokenIndex =
             childTokens[_tokenId][_childContract].length() - 1;
@@ -716,7 +720,7 @@ contract ComposableTopDown is
         uint256 _tokenId,
         address _childContract,
         uint256 _childTokenId
-    ) private {
+    ) internal {
         require(
             tokenIdToTokenOwner[_tokenId] != address(0),
             "CTD: receiveChild _tokenId does not exist."
@@ -892,7 +896,7 @@ contract ComposableTopDown is
         uint256 _tokenId,
         address _erc20Contract,
         uint256 _value
-    ) private {
+    ) internal {
         require(
             tokenIdToTokenOwner[_tokenId] != address(0),
             "CTD: erc20Received _tokenId does not exist"
@@ -915,7 +919,7 @@ contract ComposableTopDown is
         address _to,
         address _erc20Contract,
         uint256 _value
-    ) private {
+    ) internal {
         if (_value == 0) {
             return;
         }
@@ -1142,7 +1146,7 @@ contract ComposableTopDown is
         address _erc1155Contract,
         uint256 _childTokenId,
         uint256 _amount
-    ) private returns (uint256) {
+    ) internal returns (uint256) {
         if (_amount == 0) {
             return erc1155Balances[_tokenId][_erc1155Contract][_childTokenId];
         }
@@ -1227,7 +1231,7 @@ contract ComposableTopDown is
     /**
      * @dev Returns tokenId of the root bundle. Local means that it does not traverse through foreign ERC998 contracts.
      */
-    function _localRootId(uint256 tokenId) private view returns (uint256) {
+    function _localRootId(uint256 tokenId) internal view returns (uint256) {
         while (tokenIdToTokenOwner[tokenId] == address(this)) {
             tokenId = childTokenOwner[address(this)][tokenId];
         }
