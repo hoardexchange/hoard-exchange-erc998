@@ -65,7 +65,7 @@ contract ComposableTopDown is
     mapping(uint256 => address) private tokenIdToTokenOwner;
 
     // tokenId => last state hash indicator
-    mapping(uint256 => uint256) private tokenIdToStateHash;
+    mapping(uint256 => bytes32) private tokenIdToStateHash;
 
     // root token owner address => (tokenId => approved address)
     mapping(address => mapping(uint256 => address))
@@ -88,7 +88,7 @@ contract ComposableTopDown is
         uint256 tokenCount_ = tokenCount;
         tokenIdToTokenOwner[tokenCount_] = _to;
         tokenOwnerToTokenCount[_to]++;
-        tokenIdToStateHash[tokenCount] = uint256(keccak256(abi.encodePacked(address(this), tokenCount)));
+        tokenIdToStateHash[tokenCount] = keccak256(abi.encodePacked(address(this), tokenCount));
 
         emit Transfer(address(0), _to, tokenCount_);
         require(_checkOnERC721Received(address(0), _to, tokenCount_, ""), "CTD: non ERC721Receiver");
@@ -706,12 +706,12 @@ contract ComposableTopDown is
         }
         uint256 rootId = _localRootId(_tokenId);
         if (_childContract == address(this)) {
-            uint256 rootStateHash = tokenIdToStateHash[rootId];
-            uint256 childStateHash = tokenIdToStateHash[_childTokenId];
-            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(rootStateHash, _tokenId, _childContract, childStateHash)));
-            tokenIdToStateHash[_childTokenId] = uint256(keccak256(abi.encodePacked(rootStateHash, _childTokenId, _childContract, childStateHash)));
+            bytes32 rootStateHash = tokenIdToStateHash[rootId];
+            bytes32 childStateHash = tokenIdToStateHash[_childTokenId];
+            tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(rootStateHash, _tokenId, _childContract, childStateHash));
+            tokenIdToStateHash[_childTokenId] = keccak256(abi.encodePacked(rootStateHash, _childTokenId, _childContract, childStateHash));
         } else {
-            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, _childTokenId)));
+            tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, _childTokenId));
         }
     }
 
@@ -738,9 +738,9 @@ contract ComposableTopDown is
         childTokenOwner[_childContract][_childTokenId] = _tokenId;
         uint256 rootId = _localRootId(_tokenId);
         if (_childContract == address(this)) {
-            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, tokenIdToStateHash[_childTokenId])));
+            tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, tokenIdToStateHash[_childTokenId]));
         } else {
-            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, _childTokenId)));
+            tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _childContract, _childTokenId));
         }
         emit ReceivedChild(_from, _tokenId, _childContract, _childTokenId);
     }
@@ -910,7 +910,7 @@ contract ComposableTopDown is
         }
         erc20Balances[_tokenId][_erc20Contract] += _value;
         uint256 rootId = _localRootId(_tokenId);
-        tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _erc20Contract, erc20Balance + _value)));
+        tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _erc20Contract, erc20Balance + _value));
         emit ReceivedERC20(_from, _tokenId, _erc20Contract, _value);
     }
 
@@ -936,7 +936,7 @@ contract ComposableTopDown is
                 require(erc20Contracts[_tokenId].remove(_erc20Contract), "CTD: removeERC20: erc20Contracts remove _erc20Contract");
             }
             uint256 rootId = _localRootId(_tokenId);
-            tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _erc20Contract, newERC20Balance)));
+            tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _tokenId, _erc20Contract, newERC20Balance));
         }
         emit TransferERC20(_tokenId, _to, _erc20Contract, _value);
     }
@@ -983,7 +983,7 @@ contract ComposableTopDown is
         );
         uint256 newBalance = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenId, _amount);
         uint256 rootId = _localRootId(_fromTokenId);
-        tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _fromTokenId, _erc1155Contract, _childTokenId, newBalance)));
+        tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _fromTokenId, _erc1155Contract, _childTokenId, newBalance));
         emit TransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenId, _amount);
         IERC1155(_erc1155Contract).safeTransferFrom(address(this), _to, _childTokenId, _amount, _data);
     }
@@ -1017,10 +1017,10 @@ contract ComposableTopDown is
             "CTD: transferERC223 msg.sender not eligible"
         );
         uint256 rootId = _localRootId(_fromTokenId);
-        uint256 _newStateHash = tokenIdToStateHash[rootId];
+        bytes32 _newStateHash = tokenIdToStateHash[rootId];
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
             uint256 _newBalance = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenIds[i], _amounts[i]);
-            _newStateHash = uint256(keccak256(abi.encodePacked(_newStateHash, _fromTokenId, _erc1155Contract, _childTokenIds[i], _newBalance)));
+            _newStateHash = keccak256(abi.encodePacked(_newStateHash, _fromTokenId, _erc1155Contract, _childTokenIds[i], _newBalance));
         }
         tokenIdToStateHash[rootId] = _newStateHash;
         emit BatchTransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenIds, _amounts);
@@ -1090,7 +1090,7 @@ contract ComposableTopDown is
         }
         erc1155Balances[tokenId][msg.sender][_childTokenId] = erc1155Balance + _amount;
         uint256 rootId = _localRootId(tokenId);
-        tokenIdToStateHash[rootId] = uint256(keccak256(abi.encodePacked(tokenIdToStateHash[rootId], tokenId, msg.sender, _childTokenId, erc1155Balance + _amount)));
+        tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], tokenId, msg.sender, _childTokenId, erc1155Balance + _amount));
         emit ReceivedErc1155(_from, tokenId, msg.sender, _childTokenId, _amount);
         return ERC1155_RECEIVED_SINGLE;
     }
@@ -1122,7 +1122,7 @@ contract ComposableTopDown is
         );
         uint256 erc1155ContractsLength = erc1155Tokens[tokenId][msg.sender].length();
         uint256 rootId = _localRootId(tokenId);
-        uint256 _newStateHash = tokenIdToStateHash[rootId];
+        bytes32 _newStateHash = tokenIdToStateHash[rootId];
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
             uint256 erc1155Balance = erc1155Balances[tokenId][msg.sender][_childTokenIds[i]];
             if (erc1155Balance == 0) {
@@ -1133,7 +1133,7 @@ contract ComposableTopDown is
                 erc1155Tokens[tokenId][msg.sender].add(_childTokenIds[i]);
             }
             erc1155Balances[tokenId][msg.sender][_childTokenIds[i]] = erc1155Balance + _amounts[i];
-            _newStateHash = uint256(keccak256(abi.encodePacked(_newStateHash, tokenId, msg.sender, _childTokenIds[i], erc1155Balance + _amounts[i])));
+            _newStateHash = keccak256(abi.encodePacked(_newStateHash, tokenId, msg.sender, _childTokenIds[i], erc1155Balance + _amounts[i]));
         }
         tokenIdToStateHash[rootId] = _newStateHash;
         emit ReceivedBatchErc1155(_from, tokenId, msg.sender, _childTokenIds, _amounts);
@@ -1238,9 +1238,9 @@ contract ComposableTopDown is
         return tokenId;
     }
 
-    function stateHash(uint256 tokenId) external view override returns (uint256) {
-        uint256 _stateHash = tokenIdToStateHash[tokenId];
-        require(_stateHash > 0, "CTD: stateHash of _tokenId is zero");
+    function stateHash(uint256 tokenId) external view override returns (bytes32) {
+        bytes32 _stateHash = tokenIdToStateHash[tokenId];
+        require(_stateHash != 0, "CTD: stateHash of _tokenId is zero");
         return _stateHash;
     }
 
@@ -1252,7 +1252,7 @@ contract ComposableTopDown is
         address from,
         address to,
         uint256 tokenId,
-        uint256 expectedStateHash
+        bytes32 expectedStateHash
     ) external {
         require(expectedStateHash == tokenIdToStateHash[tokenId], "CTD: stateHash mismatch (1)");
         safeTransferFrom(from, to, tokenId);
@@ -1266,7 +1266,7 @@ contract ComposableTopDown is
         address from,
         address to,
         uint256 tokenId,
-        uint256 expectedStateHash
+        bytes32 expectedStateHash
     ) external {
         require(expectedStateHash == tokenIdToStateHash[tokenId], "CTD: stateHash mismatch (2)");
         transferFrom(from, to, tokenId);
@@ -1280,7 +1280,7 @@ contract ComposableTopDown is
         address from,
         address to,
         uint256 tokenId,
-        uint256 expectedStateHash,
+        bytes32 expectedStateHash,
         bytes calldata data
     ) external {
         require(expectedStateHash == tokenIdToStateHash[tokenId], "CTD: stateHash mismatch (3)");

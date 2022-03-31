@@ -29,7 +29,7 @@ npx hardhat compile
 
 ### Run Tests
 ```
-npx hardhat tests
+npx hardhat test
 ```
 
 ### Run Tests with Coverage
