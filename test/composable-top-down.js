@@ -1557,7 +1557,7 @@ describe('ComposableTopDown', async () => {
             tx = await tx.wait();
             let expectedStateHash = ethers.utils.solidityKeccak256(["address", "uint256"], [composableTopDownInstance.address, ethers.BigNumber.from(1)]);
             let stateHash = await composableTopDownInstance.stateHash(1);
-            assert(stateHash.eq(expectedStateHash), "Wrong state hash for tokenId 1");
+            assert(stateHash == expectedStateHash, "Wrong state hash for tokenId 1");
         });
         it('Should set state hash (2)', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
@@ -1575,9 +1575,9 @@ describe('ComposableTopDown', async () => {
                         bytesFirstToken);
             tx = await tx.wait();
             let stateHash12 = await composableTopDownInstance.stateHash(1);
-            assert(!stateHash12.eq(stateHash11), "state hash update (1)");
+            assert(stateHash12 != stateHash11, "state hash update (1)");
             let stateHash22 = await composableTopDownInstance.stateHash(2);
-            assert(stateHash22.eq(stateHash21), "state hash update (2)");
+            assert(stateHash22 == stateHash21, "state hash update (2)");
 
             const [nfts, erc20s] = await setUpTestTokens(1, 1);
 
@@ -1590,9 +1590,9 @@ describe('ComposableTopDown', async () => {
                         bytesSecondToken);
             tx = await tx.wait();
             let stateHash13 = await composableTopDownInstance.stateHash(1);
-            assert(!stateHash13.eq(stateHash12), "state hash update (3)");
+            assert(stateHash13 != stateHash12, "state hash update (3)");
             let stateHash23 = await composableTopDownInstance.stateHash(2);
-            assert(stateHash23.eq(stateHash22), "state hash update (4)");
+            assert(stateHash23 == stateHash22, "state hash update (4)");
 
             await erc20s[0].mint(alice.address, 10);
             await erc20s[0].connect(alice)['transfer(address,uint256,bytes)'](
@@ -1601,9 +1601,9 @@ describe('ComposableTopDown', async () => {
                     bytesSecondToken
                 );
             let stateHash14 = await composableTopDownInstance.stateHash(1);
-            assert(!stateHash14.eq(stateHash13), "state hash update (5)");
+            assert(stateHash14 != stateHash13, "state hash update (5)");
             let stateHash24 = await composableTopDownInstance.stateHash(2);
-            assert(stateHash24.eq(stateHash23), "state hash update (6)");
+            assert(stateHash24 == stateHash23, "state hash update (6)");
         });
         it('Should set state hash (3) erc721', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
@@ -1621,7 +1621,7 @@ describe('ComposableTopDown', async () => {
             tx = await tx.wait();
             let stateHash2 = await composableTopDownInstance.stateHash(1);
             let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash1, 1, nfts[0].address, ethers.BigNumber.from(1)]);
-            assert(stateHash2.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
+            assert(stateHash2 == expectedStateHash, "Wrong state hash for tokenId 1,");
 
             tx = await composableTopDownInstance.connect(alice)['transferChild(uint256,address,address,uint256)']
                     (1, alice.address,
@@ -1631,7 +1631,7 @@ describe('ComposableTopDown', async () => {
             tx = await tx.wait();
             let stateHash3 = await composableTopDownInstance.stateHash(1);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash2, 1, nfts[0].address, ethers.BigNumber.from(1)]);
-            assert(stateHash3.eq(expectedStateHash), "Wrong state hash for tokenId 2,");
+            assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
 
         });
         it('Should set state hash (4) erc20', async () => {
@@ -1648,7 +1648,7 @@ describe('ComposableTopDown', async () => {
                 );
             let stateHash2 = await composableTopDownInstance.stateHash(1);
             let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash1, 1, erc20s[0].address, 100]);
-            assert(stateHash2.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
+            assert(stateHash2 == expectedStateHash, "Wrong state hash for tokenId 1,");
 
             tx = await composableTopDownInstance.connect(alice)['transferERC20(uint256,address,address,uint256)']
                     (1, alice.address,
@@ -1658,7 +1658,7 @@ describe('ComposableTopDown', async () => {
             tx = await tx.wait();
             let stateHash3 = await composableTopDownInstance.stateHash(1);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash2, 1, erc20s[0].address, 70]);
-            assert(stateHash3.eq(expectedStateHash), "Wrong state hash for tokenId 2,");
+            assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
         });
         it('Should set state hash (5) erc1155', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
@@ -1672,12 +1672,12 @@ describe('ComposableTopDown', async () => {
             await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 2, 100, bytesFirstToken);
             let stateHash2 = await composableTopDownInstance.stateHash(1);
             let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash1, 1, sampleERC1155Instance.address, 2, 100]);
-            assert(stateHash2.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
+            assert(stateHash2 == expectedStateHash, "Wrong state hash for tokenId 1,");
 
             await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155Instance.address, 2, 30, bytesFirstToken);
             let stateHash3 = await composableTopDownInstance.stateHash(1);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash2, 1, sampleERC1155Instance.address, 2, 70]);
-            assert(stateHash3.eq(expectedStateHash), "Wrong state hash for tokenId 2,");
+            assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
         });
         it('Should set state hash (6) batch erc1155', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
@@ -1693,13 +1693,13 @@ describe('ComposableTopDown', async () => {
             let stateHash2 = await composableTopDownInstance.stateHash(1);
             let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash1, 1, sampleERC1155Instance.address, 1, 100]);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [expectedStateHash, 1, sampleERC1155Instance.address, 2, 100]);
-            assert(stateHash2.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
+            assert(stateHash2 == expectedStateHash, "Wrong state hash for tokenId 1,");
 
             await composableTopDownInstance.safeBatchTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, [1, 2], [30, 30], bytesFirstToken);
             let stateHash3 = await composableTopDownInstance.stateHash(1);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash2, 1, sampleERC1155Instance.address, 1, 70]);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [expectedStateHash, 1, sampleERC1155Instance.address, 2, 70]);
-            assert(stateHash3.eq(expectedStateHash), "Wrong state hash for tokenId 2,");
+            assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
         });
         it('Should set state hash (7) child', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
@@ -1718,9 +1718,9 @@ describe('ComposableTopDown', async () => {
             tx = await tx.wait();
             let stateHash12 = await composableTopDownInstance.stateHash(1);
             let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash11, 1, composableTopDownInstance.address, stateHash21]);
-            assert(stateHash12.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
+            assert(stateHash12 == expectedStateHash, "Wrong state hash for tokenId 1,");
             let stateHash22 = await composableTopDownInstance.stateHash(2);
-            assert(stateHash22.eq(stateHash21), "Wrong state hash for tokenId 2,");
+            assert(stateHash22 == stateHash21, "Wrong state hash for tokenId 2,");
 
             tx = await composableTopDownInstance.connect(alice)['transferChild(uint256,address,address,uint256)']
                     (1, alice.address,
@@ -1730,10 +1730,10 @@ describe('ComposableTopDown', async () => {
             tx = await tx.wait();
             let stateHash13 = await composableTopDownInstance.stateHash(1);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash12, 1, composableTopDownInstance.address, stateHash22]);
-            assert(stateHash13.eq(expectedStateHash), "Wrong state hash for tokenId 3,");
+            assert(stateHash13 == expectedStateHash, "Wrong state hash for tokenId 3,");
             let stateHash23 = await composableTopDownInstance.stateHash(2);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash12, 2, composableTopDownInstance.address, stateHash22]);
-            assert(stateHash23.eq(expectedStateHash), "Wrong state hash for tokenId 4,");
+            assert(stateHash23 == expectedStateHash, "Wrong state hash for tokenId 4,");
 
         });
         it('Should set state hash (8) child', async () => {
@@ -1757,9 +1757,9 @@ describe('ComposableTopDown', async () => {
             tx = await tx.wait();
             let stateHash12 = await composableTopDownInstance.stateHash(1);
             let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash11, 1, composableTopDownInstance.address, stateHash21]);
-            assert(stateHash12.eq(expectedStateHash), "Wrong state hash for tokenId 1,");
+            assert(stateHash12 == expectedStateHash, "Wrong state hash for tokenId 1,");
             let stateHash22 = await composableTopDownInstance.stateHash(2);
-            assert(stateHash22.eq(stateHash21), "Wrong state hash for tokenId 2,");
+            assert(stateHash22 == stateHash21, "Wrong state hash for tokenId 2,");
 
             tx = await composableTopDownInstance.connect(alice)['safeTransferFrom(address,address,uint256,bytes)']
                     (alice.address,
@@ -1785,15 +1785,15 @@ describe('ComposableTopDown', async () => {
 
             let stateHash24 = await composableTopDownInstance.stateHash(2);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash13, 2, composableTopDownInstance.address, stateHash23]);
-            assert(stateHash24.eq(expectedStateHash), "Wrong state hash for tokenId 4,");
+            assert(stateHash24 ==expectedStateHash, "Wrong state hash for tokenId 4,");
 
             let stateHash14 = await composableTopDownInstance.stateHash(1);
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash13, 1, composableTopDownInstance.address, stateHash23]); // first step: remove 2 from token id 1
             expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [expectedStateHash, 3, composableTopDownInstance.address, stateHash24]); // second step: add 2 to token id 3
-            assert(stateHash14.eq(expectedStateHash), "Wrong state hash for tokenId 5,");
+            assert(stateHash14 == expectedStateHash, "Wrong state hash for tokenId 5,");
 
             let stateHash34 = await composableTopDownInstance.stateHash(3);
-            assert(stateHash34.eq(stateHash33), "Wrong state hash for tokenId 6,");
+            assert(stateHash34 == stateHash33, "Wrong state hash for tokenId 6,");
 
         });
     });
