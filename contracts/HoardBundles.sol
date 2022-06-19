@@ -3,14 +3,15 @@
 pragma solidity 0.8.9;
 
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
-//import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 
 import "./ComposableTopDown.sol";
+import "./ComposableTopDownERC1155.sol";
+import "./ComposableTopDownERC20.sol";
 
 
-contract HoardBundles is ComposableTopDown, Ownable, IERC721Metadata {
+contract HoardBundles is ComposableTopDownERC1155, ComposableTopDownERC20, Ownable, IERC721Metadata {
 
     /**
      * @dev Emitted when `owner` changes the base token uri.
@@ -55,8 +56,10 @@ contract HoardBundles is ComposableTopDown, Ownable, IERC721Metadata {
     /**
      * @dev See {ComposableTopDown-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId) public view override(ComposableTopDown, IERC165) returns (bool) {
-        return interfaceId == type(IERC721Metadata).interfaceId || super.supportsInterface(interfaceId);
+    function supportsInterface(bytes4 interfaceId) public view override(ComposableTopDownERC1155, ComposableTopDownERC20, IERC165) returns (bool) {
+        return interfaceId == type(IERC721Metadata).interfaceId
+            || ComposableTopDownERC20.supportsInterface(interfaceId)
+            || ComposableTopDownERC1155.supportsInterface(interfaceId);
     }
 
     /**
