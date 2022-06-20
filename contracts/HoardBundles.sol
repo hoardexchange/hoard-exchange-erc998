@@ -8,10 +8,10 @@ import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 
 import "./ComposableTopDown.sol";
 import "./ComposableTopDownERC1155.sol";
-import "./ComposableTopDownERC20.sol";
+import "./ComposableTopDownERC20Enumerable.sol";
 
 
-contract HoardBundles is ComposableTopDownERC1155, ComposableTopDownERC20, Ownable, IERC721Metadata {
+contract HoardBundles is ComposableTopDownERC1155, ComposableTopDownERC20Enumerable, Ownable, IERC721Metadata {
 
     /**
      * @dev Emitted when `owner` changes the base token uri.
@@ -56,9 +56,9 @@ contract HoardBundles is ComposableTopDownERC1155, ComposableTopDownERC20, Ownab
     /**
      * @dev See {ComposableTopDown-supportsInterface}.
      */
-    function supportsInterface(bytes4 interfaceId) public view override(ComposableTopDownERC1155, ComposableTopDownERC20, IERC165) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override(ComposableTopDownERC1155, ComposableTopDownERC20Enumerable, IERC165) returns (bool) {
         return interfaceId == type(IERC721Metadata).interfaceId
-            || ComposableTopDownERC20.supportsInterface(interfaceId)
+            || ComposableTopDownERC20Enumerable.supportsInterface(interfaceId)
             || ComposableTopDownERC1155.supportsInterface(interfaceId);
     }
 
