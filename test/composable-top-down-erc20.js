@@ -4,9 +4,7 @@ const { ethers } = require("hardhat");
 describe('ComposableTopDownERC20', async () => {
     let ComposableTopDown,
         SampleERC20,
-        SampleNFT,
-        ContractIERC721ReceiverNew,
-        ContractIERC721ReceiverOld;
+        SampleNFT;
 
     const expectedTokenId = 1;
     const firstChildTokenId = 1;
@@ -15,8 +13,6 @@ describe('ComposableTopDownERC20', async () => {
     const bytesFirstToken = ethers.utils.hexZeroPad('0x1', 20);
     const zeroAddress = ethers.utils.hexZeroPad('0x0', 20);
     const ERC998_MAGIC_VALUE = '0xcd740db5';
-
-    const NFTHash = '0x1234';
 
     beforeEach(async () => {
         [
@@ -30,8 +26,6 @@ describe('ComposableTopDownERC20', async () => {
         ComposableTopDown = await ethers.getContractFactory("ComposableTopDownERC20Dev");
         SampleERC20 = await ethers.getContractFactory("SampleERC20");
         SampleNFT = await ethers.getContractFactory("SampleNFT");
-        ContractIERC721ReceiverNew = await ethers.getContractFactory("ContractIERC721ReceiverNew");
-        ContractIERC721ReceiverOld = await ethers.getContractFactory("ContractIERC721ReceiverOld");
 
         composableTopDownInstance = await ComposableTopDown.deploy();
         await composableTopDownInstance.deployed();
@@ -69,15 +63,9 @@ describe('ComposableTopDownERC20', async () => {
                 );
 
             // then:
-            const totalERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-            assert(totalERC20Contracts.eq(1), 'Invalid total erc20 contracts');
-
             const balance = await composableTopDownInstance
                 .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
             assert(balance.eq(transferAmount), 'Invalid Composable ERC20 balance');
-
-            const erc20ContractByIndex = await composableTopDownInstance.erc20ContractByIndex(expectedTokenId, 0);
-            assert(erc20ContractByIndex === sampleERC20Instance.address, 'Invalid erc20 contract by index');
         });
 
         it('Should transfer from Composable to bob via transferERC20', async () => {
@@ -164,9 +152,6 @@ describe('ComposableTopDownERC20', async () => {
 
             const bobBalance = await sampleERC20Instance.balanceOf(bob.address);
             assert(bobBalance.eq(transferAmount), 'Invalid bob balance');
-
-            const totalERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-            assert(totalERC20Contracts.eq(0), 'Invalid total erc20 contracts');
         });
 
         it('Should transfer 0 from Composable to bob via transferERC223', async () => {
@@ -318,23 +303,6 @@ describe('ComposableTopDownERC20', async () => {
                 const balance = await composableTopDownInstance.balanceOfERC20(expectedTokenId, erc20s[i].address);
                 assert(balance.eq(transferAmount), `Invalid balanceOfERC20 on Token ${i}`);
             }
-
-            const totalERC20TokensAdded = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-            assert(totalERC20TokensAdded.eq(totalTokens), 'Invalid Alice total ERC20 cotracts');
-
-            // remove erc20s
-            let tokenERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-
-            for (let i = 0; i < tokenERC20Contracts; i++) {
-                const tokenAddress = await composableTopDownInstance.erc20ContractByIndex(expectedTokenId, i);
-                const balance = await composableTopDownInstance.balanceOfERC20(expectedTokenId, tokenAddress);
-
-                await composableTopDownInstance.connect(alice).transferERC20(expectedTokenId, alice.address, tokenAddress, balance);
-                const nextNumTotalERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-
-                assert(nextNumTotalERC20Contracts.eq(tokenERC20Contracts.sub(1)), `Expected ${tokenERC20Contracts - 1} tokenContracts but got ${nextNumTotalERC20Contracts}`);
-                tokenERC20Contracts = nextNumTotalERC20Contracts;
-            }
         });
     });
 
@@ -467,11 +435,10 @@ describe('ComposableTopDownERC20', async () => {
     });
 
     describe('ERC165', async () => {
-        it('Should declare interfaces: ERC165, ERC721, IERC998ERC20TopDown, IERC998ERC20TopDownEnumerable', async () => {
+        it('Should declare interfaces: ERC165, ERC721, IERC998ERC20TopDown', async () => {
             assert(await composableTopDownInstance.supportsInterface('0x01ffc9a7'), 'No interface declaration: ERC165');
             assert(await composableTopDownInstance.supportsInterface('0x80ac58cd'), 'No interface declaration: ERC721');
             assert(await composableTopDownInstance.supportsInterface('0x7294ffed'), 'No interface declaration: IERC998ERC20TopDown');
-            assert(await composableTopDownInstance.supportsInterface('0xc5fd96cd'), 'No interface declaration: IERC998ERC20TopDownEnumerable');
             assert(await composableTopDownInstance.supportsInterface('0x4ff33816'), 'No interface declaration: StateHash');
         });
     });

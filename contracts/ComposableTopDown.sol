@@ -74,7 +74,6 @@ contract ComposableTopDown is
     //new version
     bytes4 constant ERC721_RECEIVED_NEW = 0x150b7a02;
 
-    bytes4 constant ALLOWANCE = bytes4(keccak256("allowance(address,address)"));
     bytes4 constant APPROVE = bytes4(keccak256("approve(address,uint256)"));
     bytes4 constant ROOT_OWNER_OF_CHILD =
         bytes4(keccak256("rootOwnerOfChild(address,uint256)"));
