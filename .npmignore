@@ -1,0 +1,16 @@
+/assets
+/docs
+/test
+/coverage
+/artifacts
+/cache
+
+hardhat.config.js
+
+coverage.json
+
+.idea
+.vscode
+.github
+.gitattributes
+.gitignore
