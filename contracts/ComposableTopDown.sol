@@ -61,6 +61,7 @@ contract ComposableTopDown is
 
     function _mint(address _to, uint256 tokenId) internal virtual {
         require(_to != address(0), "CTD: _to zero address");
+        require(tokenId != 0, "CTD: zero tokenId is not supported");
         tokenIdToTokenOwner[tokenId] = _to;
         tokenOwnerToTokenCount[_to]++;
         tokenIdToStateHash[tokenId] = keccak256(abi.encodePacked(address(this), tokenId));
