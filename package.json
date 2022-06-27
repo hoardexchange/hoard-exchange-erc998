@@ -1,7 +1,7 @@
 {
-  "name": "hoard-exchange-erc998",
+  "name": "@hoardexchange/erc998",
   "version": "1.0.0",
-  "description": "",
+  "description": "Composable Non-Fungible Tokens (cNFTs)",
   "main": "index.js",
   "scripts": {
     "clean": "hardhat clean",
@@ -12,8 +12,8 @@
     "test:coverage": "hardhat coverage"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Hoard Exchange",
+  "license": "UNLICENSED",
   "devDependencies": {
     "@nomiclabs/hardhat-ethers": "^2.0.2",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
@@ -26,5 +26,17 @@
     "hardhat-gas-reporter": "^1.0.4",
     "solidity-coverage": "^0.7.16"
   },
-  "types": "./typechain-types/index.ts"
+  "types": "./typechain-types/index.ts",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoardexchange/hoard-exchange-erc998.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hoardexchange/hoard-exchange-erc998/issues"
+  },
+  "homepage": "https://github.com/hoardexchange/hoard-exchange-erc998#readme"
 }
