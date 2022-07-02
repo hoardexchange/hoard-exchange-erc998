@@ -4,7 +4,6 @@ const { ethers } = require("hardhat");
 describe('ComposableTopDown', async () => {
     let ComposableTopDown,
         SampleERC20,
-        SampleERC1155,
         SampleNFT,
         ContractIERC721ReceiverNew,
         ContractIERC721ReceiverOld;
@@ -30,7 +29,6 @@ describe('ComposableTopDown', async () => {
 
         ComposableTopDown = await ethers.getContractFactory("ComposableTopDownDev");
         SampleERC20 = await ethers.getContractFactory("SampleERC20");
-        SampleERC1155 = await ethers.getContractFactory("SampleERC1155");
         SampleNFT = await ethers.getContractFactory("SampleNFT");
         ContractIERC721ReceiverNew = await ethers.getContractFactory("ContractIERC721ReceiverNew");
         ContractIERC721ReceiverOld = await ethers.getContractFactory("ContractIERC721ReceiverOld");
@@ -241,7 +239,7 @@ describe('ComposableTopDown', async () => {
 
         describe('Composable getChild', async () => {
             it('Should revert when trying to get unapproved', async () => {
-                const expectedRevertMessage = 'CTD: getChild sender is not approved';
+                const expectedRevertMessage = 'ERC721: transfer caller is not owner nor approved';
 
                 await expect(
                     composableTopDownInstance.connect(bob)
@@ -657,334 +655,6 @@ describe('ComposableTopDown', async () => {
     });
 
 
-    describe('ERC20 Transfers', async () => {
-        const mintTokensAmount = 1000;
-        const name = 'SampleERC20';
-        const symbol = 'S';
-        const transferAmount = mintTokensAmount / 2;
-        const secondTransferAmount = transferAmount / 2;
-
-        beforeEach(async () => {
-            sampleERC20Instance = await SampleERC20.deploy(name, symbol);
-
-            // mint
-            await sampleERC20Instance.mint(alice.address, mintTokensAmount);
-
-            await composableTopDownInstance.safeMint(alice.address);
-        });
-
-        it('Should have proper token balance', async () => {
-            const aliceBalance = await sampleERC20Instance.balanceOf(alice.address);
-            assert(aliceBalance.eq(mintTokensAmount), 'Invalid initial token balance');
-        });
-
-        it('Should transfer half the value from ERC20 to Composable', async () => {
-            // when:
-            await sampleERC20Instance
-                .connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    transferAmount,
-                    bytesFirstToken
-                );
-
-            // then:
-            const totalERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-            assert(totalERC20Contracts.eq(1), 'Invalid total erc20 contracts');
-
-            const balance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(balance.eq(transferAmount), 'Invalid Composable ERC20 balance');
-
-            const erc20ContractByIndex = await composableTopDownInstance.erc20ContractByIndex(expectedTokenId, 0);
-            assert(erc20ContractByIndex === sampleERC20Instance.address, 'Invalid erc20 contract by index');
-        });
-
-        it('Should transfer from Composable to bob via transferERC20', async () => {
-            // given:
-            await sampleERC20Instance
-                .connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    transferAmount,
-                    bytesFirstToken
-                );
-
-            // when:
-            await composableTopDownInstance
-                .connect(alice)
-                .transferERC20(
-                    expectedTokenId,
-                    bob.address,
-                    sampleERC20Instance.address,
-                    secondTransferAmount
-                );
-
-            // then:
-            const composableBalance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(composableBalance.eq(secondTransferAmount), 'Invalid Composable ERC20 balance');
-
-            const bobBalance = await sampleERC20Instance.balanceOf(bob.address);
-            assert(bobBalance.eq(secondTransferAmount), 'Invalid bob balance');
-        });
-
-        it('Should transfer from Composable to bob via transferERC223', async () => {
-            // given:
-            await sampleERC20Instance
-                .connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    transferAmount,
-                    bytesFirstToken
-                );
-
-            // when:
-            await composableTopDownInstance
-                .connect(alice)
-                .transferERC223(
-                    expectedTokenId,
-                    bob.address,
-                    sampleERC20Instance.address,
-                    secondTransferAmount,
-                    bytesFirstToken
-                );
-
-            // then:
-            const composableBalance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(composableBalance.eq(secondTransferAmount), 'Invalid Composable ERC20 balance');
-
-            const bobBalance = await sampleERC20Instance.balanceOf(bob.address);
-            assert(bobBalance.eq(secondTransferAmount), 'Invalid bob balance');
-        });
-
-        it('Should transfer everything from Composable to bob via transferERC223', async () => {
-            // given:
-            await sampleERC20Instance
-                .connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    transferAmount,
-                    bytesFirstToken
-                );
-
-            // when:
-            await composableTopDownInstance
-                .connect(alice)
-                .transferERC223(
-                    expectedTokenId,
-                    bob.address,
-                    sampleERC20Instance.address,
-                    transferAmount,
-                    bytesFirstToken
-                );
-
-            // then:
-            const composableBalance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(composableBalance.eq(0), 'Invalid Composable ERC20 balance');
-
-            const bobBalance = await sampleERC20Instance.balanceOf(bob.address);
-            assert(bobBalance.eq(transferAmount), 'Invalid bob balance');
-
-            const totalERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-            assert(totalERC20Contracts.eq(0), 'Invalid total erc20 contracts');
-        });
-
-        it('Should transfer 0 from Composable to bob via transferERC223', async () => {
-            // given:
-            await sampleERC20Instance
-                .connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    transferAmount,
-                    bytesFirstToken
-                );
-
-            // when:
-            await composableTopDownInstance
-                .connect(alice)
-                .transferERC223(
-                    expectedTokenId,
-                    bob.address,
-                    sampleERC20Instance.address,
-                    0,
-                    bytesFirstToken
-                );
-
-            // then:
-            const composableBalance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(composableBalance.eq(transferAmount), 'Invalid Composable ERC20 balance');
-
-            const bobBalance = await sampleERC20Instance.balanceOf(bob.address);
-            assert(bobBalance.eq(0), 'Invalid bob balance');
-        });
-
-        it('Should get tokens using getERC20', async () => {
-            // given:
-            await sampleERC20Instance.connect(alice).approve(composableTopDownInstance.address, transferAmount);
-
-            // when:
-            await composableTopDownInstance.connect(alice)
-                .getERC20(
-                    alice.address,
-                    expectedTokenId,
-                    sampleERC20Instance.address,
-                    transferAmount);
-
-            // then:
-            const composableBalance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(composableBalance.eq(transferAmount), 'Invalid Composable ERC20 balance');
-
-            const erc20ComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-            assert(erc20ComposableBalance.eq(composableBalance), 'Invalid ERC20 Composable balance');
-        });
-
-        it('Should get 0 tokens using getERC20', async () => {
-            // given:
-            await sampleERC20Instance.connect(alice).approve(composableTopDownInstance.address, transferAmount);
-
-            // when:
-            await composableTopDownInstance.connect(alice)
-                .getERC20(
-                    alice.address,
-                    expectedTokenId,
-                    sampleERC20Instance.address,
-                    0);
-
-            // then:
-            const composableBalance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(composableBalance.eq(0), 'Invalid Composable ERC20 balance');
-
-            const erc20ComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-            assert(erc20ComposableBalance.eq(0), 'Invalid ERC20 Composable balance');
-        });
-
-        it('Should revert getERC20 with invalid contract address', async () => {
-            const expectedRevertMessage = 'CTD: getERC20 allowance failed';
-            await expect(
-                composableTopDownInstance
-                    .connect(bob)
-                    .getERC20(
-                        alice.address,
-                        expectedTokenId,
-                        composableTopDownInstance.address,
-                        transferAmount)).to.be.revertedWith(
-                            expectedRevertMessage);
-        });
-
-        it('Should revert getERC20 allowed address not enough amount', async () => {
-            const expectedRevertMessage = 'CTD: getERC20 value greater than remaining';
-            // when:
-            await expect(
-                composableTopDownInstance
-                    .connect(bob)
-                    .getERC20(
-                        alice.address,
-                        expectedTokenId,
-                        sampleERC20Instance.address,
-                        transferAmount)).to.be.revertedWith(
-                            expectedRevertMessage);
-        });
-
-        it('Should get tokens using getERC20, using bob as approved sender', async () => {
-            // given:
-            await sampleERC20Instance.connect(alice).approve(bob.address, transferAmount);
-            await sampleERC20Instance.connect(alice).approve(composableTopDownInstance.address, transferAmount);
-
-            // when:
-            await composableTopDownInstance.connect(bob)
-                .getERC20(
-                    alice.address,
-                    expectedTokenId,
-                    sampleERC20Instance.address,
-                    transferAmount);
-
-            // then:
-            const composableBalance = await composableTopDownInstance
-                .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-            assert(composableBalance.eq(transferAmount), 'Invalid Composable ERC20 balance');
-
-            const erc20ComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-            assert(erc20ComposableBalance.eq(composableBalance), 'Invalid ERC20 Composable balance');
-        });
-    });
-
-    describe('ERC1155 Transfers', async () => {
-        const uri = 'https://token-cdn-domain/\\{id\\}.json';
-
-        beforeEach(async () => {
-            sampleERC1155Instance = await SampleERC1155.deploy(uri);
-
-            // mint
-            await sampleERC1155Instance.mint(alice.address, 1, 10);
-            await sampleERC1155Instance.mint(alice.address, 2, 10);
-            await sampleERC1155Instance.mint(alice.address, 3, 10);
-
-            await composableTopDownInstance.safeMint(alice.address);
-
-            sampleERC1155InstanceAlice = sampleERC1155Instance.connect(alice);
-        });
-
-        function arrayEq(a, b) {
-            if (a.length != b.length) {
-                return false;
-            }
-            for (i = 0 ; i < a.length ; i ++) {
-                if (! a[i].eq(b[i])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        it('Should transfer single', async () => {
-            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 1, 1, bytesFirstToken);
-            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(1), 'Invalid single token balance (1)');
-            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 1, 5, bytesFirstToken);
-            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(6), 'Invalid single token balance (2)');
-            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 1, 4, bytesFirstToken);
-            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(2), 'Invalid single token balance (3)');
-        });
-
-        it('Should transfer multiple', async () => {
-            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 1, 3, bytesFirstToken);
-            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 2, 6, bytesFirstToken);
-            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 3, 9, bytesFirstToken);
-            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 1, 1, bytesFirstToken);
-            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 2, 2, bytesFirstToken);
-            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, 3, 3, bytesFirstToken);
-            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 1)).eq(2), 'Invalid multiple token balance (1)');
-            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 2)).eq(4), 'Invalid multiple token balance (2)');
-            assert((await composableTopDownInstance.balanceOfERC1155(1, sampleERC1155Instance.address, 3)).eq(6), 'Invalid multiple token balance (3)');
-            assert(arrayEq(await composableTopDownInstance.balanceOfBatchERC1155([1, 1, 1], sampleERC1155Instance.address, [1, 2, 3]), [2, 4, 6]), 'Invalid multiple token balance (4)');
-        });
-
-        it('Should transfer batch', async () => {
-            await sampleERC1155InstanceAlice.safeBatchTransferFrom(alice.address, composableTopDownInstance.address, [1, 2, 3], [3, 6, 9], bytesFirstToken);
-            await composableTopDownInstance.safeBatchTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, [1, 2, 3], [1, 2, 3], bytesFirstToken);
-            assert(arrayEq(await composableTopDownInstance.balanceOfBatchERC1155([1, 1, 1], sampleERC1155Instance.address, [1, 2, 3]), [2, 4, 6]), 'Invalid multiple token balance (4)');
-        });
-
-        it('Should iterate', async () => {
-            await sampleERC1155InstanceAlice.safeBatchTransferFrom(alice.address, composableTopDownInstance.address, [1, 2, 3], [3, 6, 9], bytesFirstToken);
-            let totalContracts = await composableTopDownInstance.totalERC1155Contracts(1);
-            assert(totalContracts.eq(1), 'Invalid number of contracts');
-            for (i = 0 ; i < totalContracts.toNumber() ; i ++) {
-                let contract = composableTopDownInstance.erc1155ContractByIndex(1, i);
-                let totalChildTokens = await composableTopDownInstance.totalERC1155Tokens(1, contract);
-                assert(totalChildTokens.eq(3), 'Invalid number of child tokens');
-                let childTokens = [];
-                for (j = 0 ; j < totalChildTokens.toNumber() ; j ++) {
-                    let childToken = await composableTopDownInstance.erc1155TokenByIndex(1, contract, j);
-                    childTokens.push(childToken);
-                }
-                assert(arrayEq(childTokens, [1, 2, 3]), 'Invalid child tokens');
-            }
-        });
-
-
-    });
-
     describe('Multi Token tests', async () => {
         const mintTokensAmount = 1000;
         const transferAmount = 500;
@@ -1000,22 +670,6 @@ describe('ComposableTopDown', async () => {
             const [nfts, erc20s] = await setUpTestTokens(totalTokens, totalTokens);
 
             // when:
-
-            // transfer erc20s
-            for (let i = 0; i < erc20s.length; i++) {
-                await erc20s[i].mint(alice.address, mintTokensAmount);
-                await erc20s[i].connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    transferAmount,
-                    bytesFirstToken
-                );
-
-                const balance = await composableTopDownInstance.balanceOfERC20(expectedTokenId, erc20s[i].address);
-                assert(balance.eq(transferAmount), `Invalid balanceOfERC20 on Token ${i}`);
-            }
-
-            const totalERC20TokensAdded = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-            assert(totalERC20TokensAdded.eq(totalTokens), 'Invalid Alice total ERC20 cotracts');
 
             // transfer nfts
             for (let i = 0; i < nfts.length; i++) {
@@ -1034,20 +688,6 @@ describe('ComposableTopDown', async () => {
 
             const totalChildContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
             assert(totalChildContracts.eq(totalTokens), 'Invalid child tokens contracts count');
-
-            // remove erc20s
-            let tokenERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-
-            for (let i = 0; i < tokenERC20Contracts; i++) {
-                const tokenAddress = await composableTopDownInstance.erc20ContractByIndex(expectedTokenId, i);
-                const balance = await composableTopDownInstance.balanceOfERC20(expectedTokenId, tokenAddress);
-
-                await composableTopDownInstance.connect(alice).transferERC20(expectedTokenId, alice.address, tokenAddress, balance);
-                const nextNumTotalERC20Contracts = await composableTopDownInstance.totalERC20Contracts(expectedTokenId);
-
-                assert(nextNumTotalERC20Contracts.eq(tokenERC20Contracts.sub(1)), `Expected ${tokenERC20Contracts - 1} tokenContracts but got ${nextNumTotalERC20Contracts}`);
-                tokenERC20Contracts = nextNumTotalERC20Contracts;
-            }
 
             // remove nfts
             let totalNFTsContracts = await composableTopDownInstance.totalChildContracts(expectedTokenId);
@@ -1287,125 +927,6 @@ describe('ComposableTopDown', async () => {
                 });
             });
         });
-
-        describe('Transfer ERC20 from ComposableTopDown to ComposableTopDown', async () => {
-            const mintTokensAmount = 1000;
-            const name = 'SampleERC20';
-            const symbol = 'S';
-            const transferAmount = mintTokensAmount / 2;
-            const secondTransferAmount = transferAmount / 2;
-
-            beforeEach(async () => {
-                sampleERC20Instance = await SampleERC20.deploy(name, symbol);
-                // mint
-                await sampleERC20Instance.mint(alice.address, mintTokensAmount);
-
-                // transfer to first composable
-                await sampleERC20Instance
-                    .connect(alice)['transfer(address,uint256,bytes)'](
-                        composableTopDownInstance.address,
-                        transferAmount,
-                        bytesFirstToken
-                    );
-            });
-
-            it('Should successfully transferERC20 half the amount', async () => {
-                // when:
-                await composableTopDownInstance.connect(alice)
-                    .transferERC20(
-                        expectedTokenId,
-                        secondComposableTopDownInstance.address,
-                        sampleERC20Instance.address,
-                        secondTransferAmount
-                    );
-                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.address);
-
-                assert(firstComposableBalance.eq(secondComposableBalance), 'Invalid balances');
-            });
-
-            it('Should successfully transferERC20 everything', async () => {
-                // when:
-                await composableTopDownInstance.connect(alice)
-                    .transferERC20(
-                        expectedTokenId,
-                        secondComposableTopDownInstance.address,
-                        sampleERC20Instance.address,
-                        transferAmount
-                    );
-
-                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.address);
-
-                assert(firstComposableBalance.eq(0), 'Invalid first composable balance');
-                assert(secondComposableBalance.eq(transferAmount), 'Invalid second composable balance');
-            });
-
-            it('Should successfully transferERC223 half the amount', async () => {
-                // when:
-                await composableTopDownInstance.connect(alice)
-                    .transferERC223(
-                        expectedTokenId,
-                        secondComposableTopDownInstance.address,
-                        sampleERC20Instance.address,
-                        secondTransferAmount,
-                        bytesFirstToken
-                    );
-
-                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.address);
-
-                assert(firstComposableBalance.eq(secondComposableBalance), 'Invalid balances');
-            });
-
-            it('Should successfully transferERC223 everything', async () => {
-                // when:
-                await composableTopDownInstance.connect(alice)
-                    .transferERC223(
-                        expectedTokenId,
-                        secondComposableTopDownInstance.address,
-                        sampleERC20Instance.address,
-                        transferAmount,
-                        bytesFirstToken
-                    );
-                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.address);
-
-                assert(firstComposableBalance.eq(0), 'Invalid first composable balance');
-                assert(secondComposableBalance.eq(transferAmount), 'Invalid second composable balance');
-            });
-
-            it('Should successfully transferERC223 everything on 5 portions', async () => {
-                // given:
-                const portion = transferAmount / 5;
-
-                // when:
-                for (let i = 0; i < 5; i++) {
-                    await composableTopDownInstance.connect(alice)
-                        .transferERC223(
-                            expectedTokenId,
-                            secondComposableTopDownInstance.address,
-                            sampleERC20Instance.address,
-                            portion,
-                            bytesFirstToken
-                        );
-                }
-
-                const firstComposableBalance = await sampleERC20Instance.balanceOf(composableTopDownInstance.address);
-                const secondComposableBalance = await sampleERC20Instance.balanceOf(secondComposableTopDownInstance.address);
-
-                assert(firstComposableBalance.eq(0), 'Invalid first composable balance');
-                assert(secondComposableBalance.eq(transferAmount), 'Invalid second composable balance');
-
-                const firstComposableTokenIdBalance = await composableTopDownInstance
-                    .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-                assert(firstComposableTokenIdBalance.eq(0), 'Invalid first composable tokenId balance');
-
-                const secondComposableTokenIdBalance = await secondComposableTopDownInstance
-                    .balanceOfERC20(expectedTokenId, sampleERC20Instance.address);
-                assert(secondComposableTokenIdBalance.eq(transferAmount), 'Invalid second composable tokenId balance');
-            });
-        });
     });
 
     describe('Multiple TopDowns scenario', async () => {
@@ -1539,14 +1060,12 @@ describe('ComposableTopDown', async () => {
     });
 
     describe('ERC165', async () => {
-        it('Should declare interfaces: ERC165, ERC721, IERC998ERC721TopDown, IERC998ERC721TopDownEnumerable, IERC998ERC20TopDown, IERC998ERC20TopDownEnumerable', async () => {
+        it('Should declare interfaces: ERC165, ERC721, IERC998ERC721TopDown, IERC998ERC721TopDownEnumerable', async () => {
             assert(await composableTopDownInstance.supportsInterface('0x01ffc9a7'), 'No interface declaration: ERC165');
             assert(await composableTopDownInstance.supportsInterface('0x80ac58cd'), 'No interface declaration: ERC721');
             assert(await composableTopDownInstance.supportsInterface('0x1bc995e4'), 'No interface declaration: IERC998ERC721TopDown from spec');
             assert(await composableTopDownInstance.supportsInterface('0xcde244d9'), 'No interface declaration: IERC998ERC721TopDown');
             assert(await composableTopDownInstance.supportsInterface('0xa344afe4'), 'No interface declaration: IERC998ERC721TopDownEnumerable');
-            assert(await composableTopDownInstance.supportsInterface('0x7294ffed'), 'No interface declaration: IERC998ERC20TopDown');
-            assert(await composableTopDownInstance.supportsInterface('0xc5fd96cd'), 'No interface declaration: IERC998ERC20TopDownEnumerable');
             assert(await composableTopDownInstance.supportsInterface('0x4ff33816'), 'No interface declaration: StateHash');
         });
     });
@@ -1593,17 +1112,6 @@ describe('ComposableTopDown', async () => {
             assert(stateHash13 != stateHash12, "state hash update (3)");
             let stateHash23 = await composableTopDownInstance.stateHash(2);
             assert(stateHash23 == stateHash22, "state hash update (4)");
-
-            await erc20s[0].mint(alice.address, 10);
-            await erc20s[0].connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    10, //transferAmount
-                    bytesSecondToken
-                );
-            let stateHash14 = await composableTopDownInstance.stateHash(1);
-            assert(stateHash14 != stateHash13, "state hash update (5)");
-            let stateHash24 = await composableTopDownInstance.stateHash(2);
-            assert(stateHash24 == stateHash23, "state hash update (6)");
         });
         it('Should set state hash (3) erc721', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
@@ -1634,73 +1142,7 @@ describe('ComposableTopDown', async () => {
             assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
 
         });
-        it('Should set state hash (4) erc20', async () => {
-            let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
-            tx = await tx.wait();
-            let stateHash1 = await composableTopDownInstance.stateHash(1);
-            const [nfts, erc20s] = await setUpTestTokens(1, 1);
-            await erc20s[0].mint(alice.address, 100);
 
-            await erc20s[0].connect(alice)['transfer(address,uint256,bytes)'](
-                    composableTopDownInstance.address,
-                    100, // transferAmount
-                    bytesFirstToken
-                );
-            let stateHash2 = await composableTopDownInstance.stateHash(1);
-            let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash1, 1, erc20s[0].address, 100]);
-            assert(stateHash2 == expectedStateHash, "Wrong state hash for tokenId 1,");
-
-            tx = await composableTopDownInstance.connect(alice)['transferERC20(uint256,address,address,uint256)']
-                    (1, alice.address,
-                        erc20s[0].address,
-                        30 // erc20 amount
-                        );
-            tx = await tx.wait();
-            let stateHash3 = await composableTopDownInstance.stateHash(1);
-            expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256"], [stateHash2, 1, erc20s[0].address, 70]);
-            assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
-        });
-        it('Should set state hash (5) erc1155', async () => {
-            let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
-            tx = await tx.wait();
-            let stateHash1 = await composableTopDownInstance.stateHash(1);
-            const uri = 'https://token-cdn-domain/\\{id\\}.json';
-            const sampleERC1155Instance = await SampleERC1155.deploy(uri);
-            await sampleERC1155Instance.mint(alice.address, 2, 100);
-            const sampleERC1155InstanceAlice = sampleERC1155Instance.connect(alice);
-
-            await sampleERC1155InstanceAlice.safeTransferFrom(alice.address, composableTopDownInstance.address, 2, 100, bytesFirstToken);
-            let stateHash2 = await composableTopDownInstance.stateHash(1);
-            let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash1, 1, sampleERC1155Instance.address, 2, 100]);
-            assert(stateHash2 == expectedStateHash, "Wrong state hash for tokenId 1,");
-
-            await composableTopDownInstance.safeTransferFromERC1155(1, alice.address, sampleERC1155Instance.address, 2, 30, bytesFirstToken);
-            let stateHash3 = await composableTopDownInstance.stateHash(1);
-            expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash2, 1, sampleERC1155Instance.address, 2, 70]);
-            assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
-        });
-        it('Should set state hash (6) batch erc1155', async () => {
-            let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
-            tx = await tx.wait();
-            let stateHash1 = await composableTopDownInstance.stateHash(1);
-            const uri = 'https://token-cdn-domain/\\{id\\}.json';
-            const sampleERC1155Instance = await SampleERC1155.deploy(uri);
-            await sampleERC1155Instance.mint(alice.address, 1, 100);
-            await sampleERC1155Instance.mint(alice.address, 2, 100);
-            const sampleERC1155InstanceAlice = sampleERC1155Instance.connect(alice);
-
-            await sampleERC1155InstanceAlice.safeBatchTransferFrom(alice.address, composableTopDownInstance.address, [1, 2], [100, 100], bytesFirstToken);
-            let stateHash2 = await composableTopDownInstance.stateHash(1);
-            let expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash1, 1, sampleERC1155Instance.address, 1, 100]);
-            expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [expectedStateHash, 1, sampleERC1155Instance.address, 2, 100]);
-            assert(stateHash2 == expectedStateHash, "Wrong state hash for tokenId 1,");
-
-            await composableTopDownInstance.safeBatchTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, [1, 2], [30, 30], bytesFirstToken);
-            let stateHash3 = await composableTopDownInstance.stateHash(1);
-            expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [stateHash2, 1, sampleERC1155Instance.address, 1, 70]);
-            expectedStateHash = ethers.utils.solidityKeccak256(["uint256", "uint256", "address", "uint256", "uint256"], [expectedStateHash, 1, sampleERC1155Instance.address, 2, 70]);
-            assert(stateHash3 == expectedStateHash, "Wrong state hash for tokenId 2,");
-        });
         it('Should set state hash (7) child', async () => {
             let tx = await composableTopDownInstance.safeMint(alice.address);  // 1 tokenId
             tx = await tx.wait();
