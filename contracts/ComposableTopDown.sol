@@ -230,6 +230,17 @@ contract ComposableTopDown is
         return tokenOwnerToOperators[_owner][_operator];
     }
 
+    function _ownerOrApproved(address _sender, uint256 _tokenId) internal view {
+        address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
+        require(
+            rootOwner == _sender ||
+                tokenOwnerToOperators[rootOwner][_sender] ||
+                rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId] ==
+                _sender,
+            "CTD: sender is not approved"
+        );
+    }
+
     function transferFrom(
         address _from,
         address _to,
@@ -447,13 +458,6 @@ contract ComposableTopDown is
         uint256 _childTokenId
     ) external override {
         receiveChild(_from, _tokenId, _childContract, _childTokenId);
-        require(
-            _from == _msgSender() ||
-                IERC721(_childContract).isApprovedForAll(_from, _msgSender()) ||
-                IERC721(_childContract).getApproved(_childTokenId) ==
-                _msgSender(),
-            "CTD: getChild sender is not approved"
-        );
         IERC721(_childContract).transferFrom(
             _from,
             address(this),
@@ -587,14 +591,8 @@ contract ComposableTopDown is
             _to != address(0),
             "CTD: _transferChild _to zero address"
         );
-        address rootOwner = address(uint160(uint256(rootOwnerOf(tokenId))));
-        require(
-            rootOwner == _msgSender() ||
-                tokenOwnerToOperators[rootOwner][_msgSender()] ||
-                rootOwnerAndTokenIdToApprovedAddress[rootOwner][tokenId] ==
-                _msgSender(),
-            "CTD: _transferChild sender is not eligible"
-        );
+        address sender = _msgSender();
+        _ownerOrApproved(sender, tokenId);
         removeChild(tokenId, _childContract, _childTokenId);
     }
 

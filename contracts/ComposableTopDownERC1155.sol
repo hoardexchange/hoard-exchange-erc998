@@ -5,7 +5,6 @@ pragma solidity 0.8.9;
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import "./interfaces/IERC998ERC1155TopDown.sol";
 import "./interfaces/IERC998ERC1155TopDownEnumerable.sol";
@@ -14,22 +13,11 @@ import "./ComposableTopDown.sol";
 contract ComposableTopDownERC1155 is
     ComposableTopDown,
     IERC998ERC1155TopDown,
-    IERC998ERC1155TopDownEnumerable,
     IERC1155Receiver
 {
-    using EnumerableSet for EnumerableSet.UintSet;
-    using EnumerableSet for EnumerableSet.AddressSet;
-
     //erc1155 zepellin ERC721Receiver.sol
     bytes4 constant ERC1155_RECEIVED_SINGLE = 0xf23a6e61;
     bytes4 constant ERC1155_RECEIVED_BATCH = 0xbc197c81;
-
-    // tokenId => erc1155 contract
-    mapping(uint256 => EnumerableSet.AddressSet) internal erc1155Contracts;
-
-    // tokenId => (erc1155 contract => array of erc1155 tokens)
-    mapping(uint256 => mapping(address => EnumerableSet.UintSet))
-        internal erc1155Tokens;
 
     // tokenId => (erc1155 contract => (childToken => balance))
     mapping(uint256 => mapping(address => mapping(uint256 => uint256)))
@@ -51,18 +39,20 @@ contract ComposableTopDownERC1155 is
             _to != address(0),
             "CTD: transferERC1155 _to zero address"
         );
-        address rootOwner = address(uint160(uint256(rootOwnerOf(_fromTokenId))));
-        require(
-            rootOwner == _msgSender() ||
-                tokenOwnerToOperators[rootOwner][_msgSender()] ||
-                rootOwnerAndTokenIdToApprovedAddress[rootOwner][_fromTokenId] ==
-                _msgSender(),
-            "CTD: transferERC223 sender is not eligible"
-        );
+        address sender = _msgSender();
+        _ownerOrApproved(sender, _fromTokenId);
+
+        uint256[] memory childTokenIds = _asSingletonArray(_childTokenId);
+        uint256[] memory amounts = _asSingletonArray(_amount);
+        _beforeRemoveERC1155(sender, _fromTokenId, _to, _erc1155Contract, childTokenIds, amounts, _data);
+
         uint256 newBalance = removeERC1155(_fromTokenId, _erc1155Contract, _childTokenId, _amount);
         uint256 rootId = _localRootId(_fromTokenId);
         tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], _fromTokenId, _erc1155Contract, _childTokenId, newBalance));
         emit TransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenId, _amount);
+
+        _afterRemoveERC1155(sender, _fromTokenId, _to, _erc1155Contract, childTokenIds, amounts, _data);
+
         IERC1155(_erc1155Contract).safeTransferFrom(address(this), _to, _childTokenId, _amount, _data);
     }
 
@@ -86,14 +76,11 @@ contract ComposableTopDownERC1155 is
             _to != address(0),
             "CTD: batchTransferERC1155 _to zero address"
         );
-        address rootOwner = address(uint160(uint256(rootOwnerOf(_fromTokenId))));
-        require(
-            rootOwner == _msgSender() ||
-                tokenOwnerToOperators[rootOwner][_msgSender()] ||
-                rootOwnerAndTokenIdToApprovedAddress[rootOwner][_fromTokenId] ==
-                _msgSender(),
-            "CTD: transferERC223 sender is not eligible"
-        );
+        address sender = _msgSender();
+        _ownerOrApproved(sender, _fromTokenId);
+
+        _beforeRemoveERC1155(sender, _fromTokenId, _to, _erc1155Contract, _childTokenIds, _amounts, _data);
+
         uint256 rootId = _localRootId(_fromTokenId);
         bytes32 _newStateHash = tokenIdToStateHash[rootId];
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
@@ -102,8 +89,47 @@ contract ComposableTopDownERC1155 is
         }
         tokenIdToStateHash[rootId] = _newStateHash;
         emit BatchTransferERC1155(_fromTokenId, _to, _erc1155Contract, _childTokenIds, _amounts);
+
+        _afterRemoveERC1155(sender, _fromTokenId, _to, _erc1155Contract, _childTokenIds, _amounts, _data);
+
         IERC1155(_erc1155Contract).safeBatchTransferFrom(address(this), _to, _childTokenIds, _amounts, _data);
     }
+
+    function removeERC1155(
+        uint256 _tokenId,
+        address _erc1155Contract,
+        uint256 _childTokenId,
+        uint256 _amount
+    ) internal returns (uint256) {
+        uint256 erc1155Balance = erc1155Balances[_tokenId][_erc1155Contract][_childTokenId];
+        require(
+            erc1155Balance >= _amount,
+            "CTD: removeERC1155 value not enough"
+        );
+        uint256 newERC1155Balance = erc1155Balance - _amount;
+        erc1155Balances[_tokenId][_erc1155Contract][_childTokenId] = newERC1155Balance;
+        return newERC1155Balance;
+    }
+
+    function _beforeRemoveERC1155(
+        address _operator,
+        uint256 _tokenId,
+        address _to,
+        address _erc1155Contract,
+        uint256[] memory _childTokenIds,
+        uint256[] memory _amounts,
+        bytes memory data
+    ) internal virtual {}
+
+    function _afterRemoveERC1155(
+        address _operator,
+        uint256 _tokenId,
+        address _to,
+        address _erc1155Contract,
+        uint256[] memory _childTokenIds,
+        uint256[] memory _amounts,
+        bytes memory data
+    ) internal virtual {}
 
     /**
      * @dev See {IERC1155-balanceOf}.
@@ -143,7 +169,7 @@ contract ComposableTopDownERC1155 is
      * @dev See {IERC1155Receiver-onERC1155Received}.
      */
     function onERC1155Received(
-        address,
+        address _operator,
         address _from,
         uint256 _childTokenId,
         uint256 _amount,
@@ -159,17 +185,20 @@ contract ComposableTopDownERC1155 is
             tokenIdToTokenOwner[tokenId] != address(0),
             "CTD: onERC1155Received tokenId does not exist."
         );
-        uint256 erc1155Balance = erc1155Balances[tokenId][_msgSender()][_childTokenId];
-        if (erc1155Balance == 0) {
-            if (erc1155Tokens[tokenId][_msgSender()].length() == 0) {
-                erc1155Contracts[tokenId].add(_msgSender());
-            }
-            erc1155Tokens[tokenId][_msgSender()].add(_childTokenId);
-        }
-        erc1155Balances[tokenId][_msgSender()][_childTokenId] = erc1155Balance + _amount;
+
+        address erc1155Contract = _msgSender();
+        uint256[] memory childTokenIds = _asSingletonArray(_childTokenId);
+        uint256[] memory amounts = _asSingletonArray(_amount);
+        _beforeERC1155Received(_operator, _from, tokenId, erc1155Contract, childTokenIds, amounts, _data);
+
+        uint256 erc1155Balance = erc1155Balances[tokenId][erc1155Contract][_childTokenId];
+        erc1155Balances[tokenId][erc1155Contract][_childTokenId] = erc1155Balance + _amount;
         uint256 rootId = _localRootId(tokenId);
-        tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], tokenId, _msgSender(), _childTokenId, erc1155Balance + _amount));
-        emit ReceivedErc1155(_from, tokenId, _msgSender(), _childTokenId, _amount);
+        tokenIdToStateHash[rootId] = keccak256(abi.encodePacked(tokenIdToStateHash[rootId], tokenId, erc1155Contract, _childTokenId, erc1155Balance + _amount));
+        emit ReceivedErc1155(_from, tokenId, erc1155Contract, _childTokenId, _amount);
+
+        _afterERC1155Received(_operator, _from, tokenId, erc1155Contract, childTokenIds, amounts, _data);
+
         return ERC1155_RECEIVED_SINGLE;
     }
 
@@ -178,7 +207,7 @@ contract ComposableTopDownERC1155 is
      * @dev See {IERC1155Receiver-onERC1155Received}.
      */
     function onERC1155BatchReceived(
-        address,
+        address _operator,
         address _from,
         uint256[] calldata _childTokenIds,
         uint256[] calldata _amounts,
@@ -198,91 +227,56 @@ contract ComposableTopDownERC1155 is
             tokenIdToTokenOwner[tokenId] != address(0),
             "CTD: onERC1155BatchReceived tokenId does not exist."
         );
-        uint256 erc1155ContractsLength = erc1155Tokens[tokenId][_msgSender()].length();
+
+        address erc1155Contract = _msgSender();
+        _beforeERC1155Received(_operator, _from, tokenId, erc1155Contract, _childTokenIds, _amounts, _data);
+
         uint256 rootId = _localRootId(tokenId);
         bytes32 _newStateHash = tokenIdToStateHash[rootId];
         for (uint256 i = 0; i < _childTokenIds.length; ++i) {
-            uint256 erc1155Balance = erc1155Balances[tokenId][_msgSender()][_childTokenIds[i]];
-            if (erc1155Balance == 0) {
-                if (erc1155ContractsLength == 0) {
-                    erc1155Contracts[tokenId].add(_msgSender());
-                    erc1155ContractsLength = 1;
-                }
-                erc1155Tokens[tokenId][_msgSender()].add(_childTokenIds[i]);
-            }
-            erc1155Balances[tokenId][_msgSender()][_childTokenIds[i]] = erc1155Balance + _amounts[i];
-            _newStateHash = keccak256(abi.encodePacked(_newStateHash, tokenId, _msgSender(), _childTokenIds[i], erc1155Balance + _amounts[i]));
+            uint256 erc1155Balance = erc1155Balances[tokenId][erc1155Contract][_childTokenIds[i]];
+            erc1155Balances[tokenId][erc1155Contract][_childTokenIds[i]] = erc1155Balance + _amounts[i];
+            _newStateHash = keccak256(abi.encodePacked(_newStateHash, tokenId, erc1155Contract, _childTokenIds[i], erc1155Balance + _amounts[i]));
         }
         tokenIdToStateHash[rootId] = _newStateHash;
-        emit ReceivedBatchErc1155(_from, tokenId, _msgSender(), _childTokenIds, _amounts);
+        emit ReceivedBatchErc1155(_from, tokenId, erc1155Contract, _childTokenIds, _amounts);
+
+        _afterERC1155Received(_operator, _from, tokenId, erc1155Contract, _childTokenIds, _amounts, _data);
+
         return ERC1155_RECEIVED_BATCH;
     }
 
 
-    function removeERC1155(
+    function _beforeERC1155Received(
+        address _operator,
+        address _from,
         uint256 _tokenId,
         address _erc1155Contract,
-        uint256 _childTokenId,
-        uint256 _amount
-    ) internal returns (uint256) {
-        if (_amount == 0) {
-            return erc1155Balances[_tokenId][_erc1155Contract][_childTokenId];
-        }
-        uint256 erc1155Balance = erc1155Balances[_tokenId][_erc1155Contract][_childTokenId];
-        require(
-            erc1155Balance >= _amount,
-            "CTD: removeERC1155 value not enough"
-        );
-        uint256 newERC1155Balance = erc1155Balance - _amount;
-        erc1155Balances[_tokenId][_erc1155Contract][_childTokenId] = newERC1155Balance;
-        if (newERC1155Balance == 0) {
-            if (erc1155Tokens[_tokenId][_erc1155Contract].length() == 1) {
-                erc1155Contracts[_tokenId].remove(_erc1155Contract);
-            }
-            erc1155Tokens[_tokenId][_erc1155Contract].remove(_childTokenId);
-        }
-        return newERC1155Balance;
-    }
+        uint256[] memory _childTokenIds,
+        uint256[] memory _amounts,
+        bytes memory data
+    ) internal virtual {}
 
-    function totalERC1155Contracts(uint256 _tokenId)
-        external
-        view
-        override
-        returns (uint256)
-    {
-        return erc1155Contracts[_tokenId].length();
-    }
-
-    function erc1155ContractByIndex(uint256 _tokenId, uint256 _index)
-        external
-        view
-        override
-        returns (address)
-    {
-        return erc1155Contracts[_tokenId].at(_index);
-    }
-
-    function totalERC1155Tokens(uint256 _tokenId, address _erc1155Contract)
-        external
-        view
-        override
-        returns (uint256)
-    {
-        return erc1155Tokens[_tokenId][_erc1155Contract].length();
-    }
-
-    function erc1155TokenByIndex(
+    function _afterERC1155Received(
+        address _operator,
+        address _from,
         uint256 _tokenId,
         address _erc1155Contract,
-        uint256 _index
-    ) external view override returns (uint256 erc1155TokenId) {
-        return erc1155Tokens[_tokenId][_erc1155Contract].at(_index);
-    }
+        uint256[] memory _childTokenIds,
+        uint256[] memory _amounts,
+        bytes memory data
+    ) internal virtual {}
 
     function supportsInterface(bytes4 interfaceId) public virtual view override(IERC165, ComposableTopDown) returns (bool) {
         return interfaceId == type(IERC998ERC1155TopDown).interfaceId
-            || interfaceId == type(IERC998ERC1155TopDownEnumerable).interfaceId
             || interfaceId == type(IERC1155Receiver).interfaceId
             || ComposableTopDown.supportsInterface(interfaceId);
+    }
+
+    function _asSingletonArray(uint256 element) private pure returns (uint256[] memory) {
+        uint256[] memory array = new uint256[](1);
+        array[0] = element;
+
+        return array;
     }
 }

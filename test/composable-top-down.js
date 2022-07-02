@@ -239,7 +239,7 @@ describe('ComposableTopDown', async () => {
 
         describe('Composable getChild', async () => {
             it('Should revert when trying to get unapproved', async () => {
-                const expectedRevertMessage = 'CTD: getChild sender is not approved';
+                const expectedRevertMessage = 'ERC721: transfer caller is not owner nor approved';
 
                 await expect(
                     composableTopDownInstance.connect(bob)

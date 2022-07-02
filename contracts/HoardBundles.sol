@@ -7,11 +7,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 
 import "./ComposableTopDown.sol";
-import "./ComposableTopDownERC1155.sol";
 import "./ComposableTopDownERC20Enumerable.sol";
+import "./ComposableTopDownERC1155Enumerable.sol";
 
 
-contract HoardBundles is ComposableTopDownERC1155, ComposableTopDownERC20Enumerable, Ownable, IERC721Metadata {
+contract HoardBundles is ComposableTopDownERC1155Enumerable, ComposableTopDownERC20Enumerable, Ownable, IERC721Metadata {
 
     /**
      * @dev Emitted when `owner` changes the base token uri.
@@ -55,11 +55,21 @@ contract HoardBundles is ComposableTopDownERC1155, ComposableTopDownERC20Enumera
 
     /**
      * @dev See {ComposableTopDown-supportsInterface}.
+     * All interfaces are listed directly because of contract bytecode length optimization
      */
-    function supportsInterface(bytes4 interfaceId) public view override(ComposableTopDownERC1155, ComposableTopDownERC20Enumerable, IERC165) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public pure override(ComposableTopDownERC1155Enumerable, ComposableTopDownERC20Enumerable, IERC165) returns (bool) {
         return interfaceId == type(IERC721Metadata).interfaceId
-            || ComposableTopDownERC20Enumerable.supportsInterface(interfaceId)
-            || ComposableTopDownERC1155.supportsInterface(interfaceId);
+            || interfaceId == type(IERC998ERC1155TopDownEnumerable).interfaceId
+            || interfaceId == type(IERC998ERC1155TopDown).interfaceId
+            || interfaceId == type(IERC1155Receiver).interfaceId
+            || interfaceId == type(IERC998ERC20TopDownEnumerable).interfaceId
+            || interfaceId == type(IERC998ERC20TopDown).interfaceId
+            || interfaceId == type(IERC721).interfaceId
+            || interfaceId == type(IERC998ERC721TopDown).interfaceId
+            || interfaceId == type(IERC998ERC721TopDownEnumerable).interfaceId
+            || interfaceId == 0x1bc995e4
+            || interfaceId == type(StateHash).interfaceId
+            || interfaceId == type(IERC165).interfaceId;
     }
 
     /**

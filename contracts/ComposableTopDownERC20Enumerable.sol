@@ -38,8 +38,8 @@ contract ComposableTopDownERC20Enumerable is
         address _erc20Contract,
         uint256 _value
     ) internal virtual override {
-        if (erc20Balances[_tokenId][_erc20Contract] == _value) {
-            // the new balance is 0, so the ERC20 contract is removed
+        if (erc20Balances[_tokenId][_erc20Contract] == _value && _value > 0) {
+            // the new balance becomes 0, so the ERC20 contract is removed
             require(erc20Contracts[_tokenId].remove(_erc20Contract), "CTD: removeERC20: erc20Contracts remove _erc20Contract");
         }
     }

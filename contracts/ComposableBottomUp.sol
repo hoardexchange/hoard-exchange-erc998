@@ -407,7 +407,7 @@ contract ComposableBottomUp is
         address _toContract,
         uint256 _toTokenId,
         uint256 _tokenId,
-        bytes memory _data
+        bytes memory /* _data */
     ) external override {
         require(_from != address(0), "ComposableBottomUp: transferToParent _from zero address");
         require(tokenIdToTokenOwner[_tokenId].tokenOwner == _from, "ComposableBottomUp: transferToParent tokenOwner != _from");
@@ -474,7 +474,7 @@ contract ComposableBottomUp is
         address _toContract,
         uint256 _toTokenId,
         uint256 _tokenId,
-        bytes memory _data
+        bytes memory /* _data */
     ) external override {
         require(tokenIdToTokenOwner[_tokenId].tokenOwner == _fromContract, "ComposableBottomUp: transferAsChild tokenOwner != _fromContract");
         require(_toContract != address(0), "ComposableBottomUp: transferAsChild _toContract zero address");

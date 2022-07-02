@@ -87,33 +87,13 @@ describe('ComposableTopDownERC1155', async () => {
             await composableTopDownInstance.safeBatchTransferFromERC1155(1, alice.address, sampleERC1155InstanceAlice.address, [1, 2, 3], [1, 2, 3], bytesFirstToken);
             assert(arrayEq(await composableTopDownInstance.balanceOfBatchERC1155([1, 1, 1], sampleERC1155Instance.address, [1, 2, 3]), [2, 4, 6]), 'Invalid multiple token balance (4)');
         });
-
-        it('Should iterate', async () => {
-            await sampleERC1155InstanceAlice.safeBatchTransferFrom(alice.address, composableTopDownInstance.address, [1, 2, 3], [3, 6, 9], bytesFirstToken);
-            let totalContracts = await composableTopDownInstance.totalERC1155Contracts(1);
-            assert(totalContracts.eq(1), 'Invalid number of contracts');
-            for (i = 0 ; i < totalContracts.toNumber() ; i ++) {
-                let contract = composableTopDownInstance.erc1155ContractByIndex(1, i);
-                let totalChildTokens = await composableTopDownInstance.totalERC1155Tokens(1, contract);
-                assert(totalChildTokens.eq(3), 'Invalid number of child tokens');
-                let childTokens = [];
-                for (j = 0 ; j < totalChildTokens.toNumber() ; j ++) {
-                    let childToken = await composableTopDownInstance.erc1155TokenByIndex(1, contract, j);
-                    childTokens.push(childToken);
-                }
-                assert(arrayEq(childTokens, [1, 2, 3]), 'Invalid child tokens');
-            }
-        });
-
-
     });
 
     describe('ERC165', async () => {
-        it('Should declare interfaces: ERC165, ERC721, IERC998ERC721TopDown, IERC998ERC721TopDownEnumerable, IERC998ERC20TopDown, IERC998ERC20TopDownEnumerable', async () => {
+        it('Should declare interfaces: ERC165, ERC721, IERC998ERC1155TopDown, IERC1155Receiver', async () => {
             assert(await composableTopDownInstance.supportsInterface('0x01ffc9a7'), 'No interface declaration: ERC165');
             assert(await composableTopDownInstance.supportsInterface('0x80ac58cd'), 'No interface declaration: ERC721');
             assert(await composableTopDownInstance.supportsInterface('0x7064387e'), 'No interface declaration: IERC998ERC1155TopDown');
-            assert(await composableTopDownInstance.supportsInterface('0x81de020c'), 'No interface declaration: IERC998ERC1155TopDownEnumerable');
             assert(await composableTopDownInstance.supportsInterface('0x4e2312e0'), 'No interface declaration: IERC1155Receiver');
         });
     });

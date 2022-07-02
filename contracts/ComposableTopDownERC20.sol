@@ -30,15 +30,8 @@ contract ComposableTopDownERC20 is
             _to != address(0),
             "CTD: transferERC20 _to zero address"
         );
-        address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         address sender = _msgSender();
-        require(
-            rootOwner == sender ||
-                tokenOwnerToOperators[rootOwner][sender] ||
-                rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId] ==
-                sender,
-            "CTD: transferERC20 sender is not eligible"
-        );
+        _ownerOrApproved(sender, _tokenId);
         _removeERC20(_tokenId, _to, _erc20Contract, _value);
         require(
             IERC20AndERC223(_erc20Contract).transfer(_to, _value),
@@ -58,15 +51,8 @@ contract ComposableTopDownERC20 is
             _to != address(0),
             "CTD: transferERC223 _to zero address"
         );
-        address rootOwner = address(uint160(uint256(rootOwnerOf(_tokenId))));
         address sender = _msgSender();
-        require(
-            rootOwner == sender ||
-                tokenOwnerToOperators[rootOwner][sender] ||
-                rootOwnerAndTokenIdToApprovedAddress[rootOwner][_tokenId] ==
-                sender,
-            "CTD: transferERC223 sender is not eligible"
-        );
+        _ownerOrApproved(sender, _tokenId);
         _removeERC20(_tokenId, _to, _erc223Contract, _value);
         require(
             IERC20AndERC223(_erc223Contract).transfer(_to, _value, _data),
@@ -80,9 +66,6 @@ contract ComposableTopDownERC20 is
         address _erc20Contract,
         uint256 _value
     ) internal {
-        if (_value == 0) {
-            return;
-        }
         uint256 erc20Balance = erc20Balances[_tokenId][_erc20Contract];
         require(
             erc20Balance >= _value,
